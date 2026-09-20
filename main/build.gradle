@@ -11,13 +11,15 @@ sourceSets.main{
     ]
 }
 
+sourceCompatibility = 17
+targetCompatibility = 17
+
 dependencies{
     compileOnly "org.jetbrains:annotations:24.0.1"
     compileOnly "com.github.Anuken.Arc:arc-core:$arcVersion"
     compileOnly "com.github.Anuken.Mindustry:core:$mindustryVersion"
     compileOnly project(':annotations')
     annotationProcessor project(':annotations')
-    annotationProcessor "com.github.Anuken:jabel:$jabelVersion"
 }
 
 ext{
@@ -27,13 +29,15 @@ ext{
     fetchRevision = 0
 }
 
-import arc.files.*
-import arc.func.*
-import arc.struct.*
-import arc.util.*
-import arc.util.serialization.*
+import arc.files.Fi
+import arc.struct.Seq
+import arc.util.Http
+import arc.util.Log
+import arc.util.OS
+import arc.util.UnsafeRunnable
+import arc.util.serialization.Jval
 
-import java.util.concurrent.*
+import java.util.concurrent.CopyOnWriteArrayList
 
 task deploy(type: Jar, dependsOn: configurations.runtimeClasspath){
     dependsOn ':tools:proc'
@@ -68,7 +72,7 @@ task dex(type: Jar){
         command += ['--lib', file("$sdkRoot/platforms/android-$sdkVersion/android.jar")]
 
         if(OS.isWindows) command = ['cmd', '/c'] + command
-        command.join(' ').execute(null, new File("$buildDir/libs")).waitForProcessOutput(System.out, System.err)
+        command.execute(null, new File("$buildDir/libs")).waitForProcessOutput(System.out, System.err)
     }
 
     from zipTree(desktopJar)
@@ -120,12 +124,12 @@ task fetchComps{
                                             final def content = comp.getResultAsString()
                                                     .replace('mindustry.entities.comp', fetchPackage.replace('/', '.'))
                                                     .replace('mindustry.annotations.Annotations.*', modName + '.annotations.Annotations.*')
-                                                    .replaceAll('@Component\\((base = true|.)+\\)\\n*', '@EntityComponent(base = true, write = false)\n')
-                                                    .replaceAll('@Component\\n*', '@EntityComponent(write = false)\n')
-                                                    .replaceAll('@BaseComponent\\n*', '@EntityBaseComponent\n')
-                                                    .replaceAll('@CallSuper\\n*', '')
-                                                    .replaceAll('@Final\\n*', '')
-                                                    .replaceAll('@EntityDef\\(*.*\\)*\\n*', '')
+                                                    .replaceAll('@Component\\((base = true|.)+\\)\n*', '@EntityComponent(base = true, write = false)\n')
+                                                    .replaceAll('@Component\n*', '@EntityComponent(write = false)\n')
+                                                    .replaceAll('@BaseComponent\n*', '@EntityBaseComponent\n')
+                                                    .replaceAll('@CallSuper\n*', '')
+                                                    .replaceAll('@Final\n*', '')
+                                                    .replaceAll('@EntityDef\\(*.*\\)*\n*', '')
                                                     .replaceAll('@MethodPriority\\(([^)]+)f\\)', '@MethodPriority($1)')
 
                                             if(content.isEmpty()) throw new IllegalStateException()
@@ -159,6 +163,7 @@ task fetchComps{
 }
 
 tasks.withType(JavaCompile).configureEach{ task ->
+    task.options.release = 17
     task.dependsOn 'fetchComps'
 }
 

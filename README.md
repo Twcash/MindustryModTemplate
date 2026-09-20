@@ -2,7 +2,7 @@
   <img src="main/assets-raw/sprites/img.png" alt="img.png" />
 </p>
 
-An advanced Java mod template for [Mindustry](https://github.com/Anuken/Mindustry), designed for experienced modders. It features a robust annotation-driven code generation system, an automated asset processing pipeline, GitHub Actions CI for cross-platform builds, and Jabel integration for modern Java syntax with Java 8 bytecode compatibility.
+An advanced Java mod template for [Mindustry](https://github.com/Anuken/Mindustry), designed for experienced modders. It features a robust annotation-driven code generation system, an automated asset processing pipeline with text icon generation, GitHub Actions CI for cross-platform builds, and Java 17 throughout.
 
 This template is based on the public version of the [ProjectUnity](https://github.com/AvantTeam/ProjectUnityPublic) mod by the AvantTeam.
 
@@ -36,7 +36,7 @@ Before diving in, a good understanding of Java and Git is **highly recommended**
         *   `author`: Your name or your team's name.
         *   `description`: A brief description of your mod.
         *   `version`: Your mod's version (e.g., `1.0.0`).
-        *   `minGameVersion`: The minimum Mindustry version your mod supports (e.g., `149`).
+        *   `minGameVersion`: The minimum Mindustry version your mod supports (e.g., `160.5`).
         *   `main`: The fully qualified name of your main mod class (e.g., `myawesomemod.MyAwesomeMod`).
     *   **`gradle.properties`:**
         *   `classPrefix`: A prefix for certain generated Java classes (like `YourPrefixSounds.java`, `YourPrefixEntityMapping.java`). If left empty, it defaults to your `displayName` from `mod.json` (with spaces removed). For example, if `displayName` is "My Awesome Mod", `classPrefix` would default to `MyAwesomeMod`.
@@ -44,7 +44,7 @@ Before diving in, a good understanding of Java and Git is **highly recommended**
             *   If this path points to a Steam Mindustry installation (containing `Mindustry.exe`), tasks like `install`, `installClient`, and `runClient` will correctly target its subdirectories (e.g., `saves/mods/`).
             *   If set to a non-Steam directory, these tasks will use a `mods` subdirectory within it (e.g. `[mindustryPath]/mods/`).
             *   If left empty, tasks default to using a `run/` directory within your project's root (e.g., `[projectDir]/run/mods/` for `install`, `[projectDir]/run/client-[version].jar` for `installClient`). This `run/` directory will be created if it doesn't exist.
-        *   `mindustryVersion`: The version of Mindustry client to download for the `installClient` and `runClient` tasks (e.g., `v146`). This should match a release tag on Mindustry's GitHub repository.
+        *   `mindustryVersion`: The version of Mindustry client to download for the `installClient` and `runClient` tasks (e.g., `v160.5`). This should match a release tag on Mindustry's GitHub repository.
     *   **Java Source Files:**
         *   Rename the default package `template` in `main/src/` to your sanitized mod name (e.g., to `myawesomemod` if your `mod.json` `name` is `my-awesome-mod`).
         *   Rename the main mod class `main/src/(your-new-package-name)/Template.java` to your desired class name (e.g., `MyAwesomeMod.java`).
@@ -121,7 +121,7 @@ Before diving in, a good understanding of Java and Git is **highly recommended**
     +    "author": "A Modder",
     +    "description": "An awesome mod for Mindustry!",
         "version": "1.0",
-        "minGameVersion": 149,
+        "minGameVersion": 160.5,
     -    "main": "template.Template",
     +    "main": "myawesomemod.MyAwesomeMod",
         "java": true,
@@ -157,15 +157,16 @@ Before diving in, a good understanding of Java and Git is **highly recommended**
 5.  **Asset Workflow:**
     *   Place your **raw, unprocessed assets** (e.g., original PNGs for sprites, WAV files for sounds) into the `main/assets-raw/` directory. Use a logical subdirectory structure (e.g., `sprites/units/`, `sounds/effects/`).
     *   Run the asset processing task: `./gradlew tools:proc` (or `gradlew.bat tools:proc` on Windows).
-    *   Processed assets will be output to `main/assets/`, mirroring the structure from `assets-raw/`. These are the assets bundled into your mod.
-    *   Generated asset classes like `Regions.java`, `MyAwesomeModSounds.java` (if `classPrefix` is `MyAwesomeMod`) will be created/updated in the `main/build/generated/sources/annotationProcessor/java/main/myawesomemod/gen/` directory (e.g., if your sanitized mod name is `myawesomemod`) and automatically included in compilation.
+    *   Processed assets will be output to `main/assets/`, mirroring the structure from `assets-raw/`. These are the assets bundled into your mod. Note that `tools:proc` (also run automatically by `main:deploy`) wipes and regenerates `main/assets/sprites/`, so never hand-edit files there — `main/assets-raw/` is the source of truth.
+    *   Generated asset classes like `Regions.java`, `MyAwesomeModSounds.java` (if `classPrefix` is `MyAwesomeMod`) will be created/updated in the `main/build/generated/sources/annotationProcessor/java/main/myawesomemod/gen/` directory (e.g., if your sanitized mod name is `myawesomemod`) and automatically included in compilation. This also includes `MyAwesomeModIconc`/`MyAwesomeModIconLoader` for text icons (see below).
+    *   **Custom text icons:** place PNGs in `main/assets-raw/icons/` (e.g., `my-icon.png`). The `tools:proc` run copies them to `sprites/ui/` as `[mod]-[name]-ui`, registers them in `main/assets/icons/[mod]-icons.properties` with a codepoint, and generates `MyAwesomeModIconc` constants plus the `MyAwesomeModIconLoader.loadIcons()` registrar. Content icons (`-ui` regions) are generated automatically by the `ItemProcessor`/`BlockProcessor`/`UnitProcessor` runs.
 
     That's the core setup! You can now start developing your mod.
 
 ## Building the Mod
 
 Mindustry Java mods are typically cross-platform. Builds are managed via Gradle.
-This template uses Jabel to allow you to write modern Java syntax (e.g., Java 17 features) in your `main` module, which is then compiled down to Java 8 compatible bytecode. This ensures your mod can run on Mindustry instances using Java 8. All modules in this template are standardized to use Java 17.
+This template compiles everything to Java 17 bytecode (the `main` module sets `sourceCompatibility`, `targetCompatibility`, and `options.release` to 17), so the built JAR requires a Java 17 runtime. All modules in this template are standardized to use Java 17.
 
 ### Desktop Build (PC)
 
@@ -284,7 +285,7 @@ List of planned features and improvements for the template itself.
 |:------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 |   ✅   | Fix inconsistencies, bugs, improve quality, and enhance documentation.                                                                                                     |
 |   🙏   | Add more generating classes like `PrefixSounds`/`PrefixMusics` for other things.                                                                                           |
-|   🙏   | Add text icon generation for mod content with support for custom icons (e.g., non-content). <br/>Investigate vanilla copy integration (e.g., Shift+Click inside Database). |
+|   ✅   | Add text icon generation for mod content with support for custom icons (e.g., non-content). Vanilla copy integration (e.g., Shift+Click inside Database) works through the registered codepoints. |
 |   ✅   | Add `run` task kinda like Mindustry's one (`runClient`).                                                                                                                   |
 
 ## License

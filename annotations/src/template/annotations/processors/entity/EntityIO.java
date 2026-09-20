@@ -41,7 +41,8 @@ public class EntityIO{
         this.write = write;
 
         for(VariableElement e : sel(fields)){
-            io(proc, e.asType().toString(), "this." + BaseProcessor.simpleName(e) + (write ? "" : " = "));
+            if(BaseProcessor.annotation(e, NoSerialize.class) != null) continue;
+            io(proc, e.asType().toString(), "this." + BaseProcessor.simpleName(e) + (write ? "" : " = "), false);
         }
     }
 
@@ -51,7 +52,7 @@ public class EntityIO{
 
         if(write){
             for(VariableElement e : sel(allFields)){
-                io(proc, e.asType().toString(), "this." + BaseProcessor.simpleName(e));
+                io(proc, e.asType().toString(), "this." + BaseProcessor.simpleName(e), true);
             }
         }else{
             st("if(lastUpdated != 0) updateSpacing = $T.timeSinceMillis(lastUpdated)", Time.class);
@@ -68,12 +69,12 @@ public class EntityIO{
                     st(BaseProcessor.simpleName(e) + "_LAST_" + " = this." + BaseProcessor.simpleName(e));
                 }
 
-                io(proc, e.asType().toString(), "this." + (sf ? BaseProcessor.simpleName(e) + "_TARGET_" : BaseProcessor.simpleName(e)) + " = ");
+                io(proc, e.asType().toString(), "this." + (sf ? BaseProcessor.simpleName(e) + "_TARGET_" : BaseProcessor.simpleName(e)) + " = ", true);
 
                 if(sl){
-                    ncont("else" );
+                    ncont("else");
 
-                    io(proc, e.asType().toString(), "");
+                    io(proc, e.asType().toString(), "", true);
 
                     if(sf){
                         st(BaseProcessor.simpleName(e) + "_LAST_" + " = this." + BaseProcessor.simpleName(e));
@@ -131,30 +132,30 @@ public class EntityIO{
         econt();
     }
 
-    public void io(BaseProcessor proc, String type, String field){
+    public void io(BaseProcessor proc, String type, String field, boolean network){
         type = type.replace("mindustry.gen.", "").replace(BaseProcessor.sanitizedModName + ".gen.", "");
 
         if(BaseProcessor.isPrimitive(type)){
             s(type.equals("boolean") ? "bool" : type.charAt(0) + "", field);
         }else if(proc.instanceOf(type, "mindustry.ctype.Content")){
             if(write){
-                s("s", field + ".id");
+                s("s", field + " == null ? -1 : " + field + ".id");
             }else{
                 st(field + "$T.content.getByID($T.$L, read.s())", BaseProcessor.cName(Vars.class), BaseProcessor.cName(ContentType.class), BaseProcessor.simpleName(type).toLowerCase().replace("type", ""));
             }
-        }else if(serializer.writers.containsKey(type) && write){
-            st("$L(write, $L)", serializer.writers.get(type), field);
+        }else if((serializer.writers.containsKey(type) || (network && serializer.netWriters.containsKey(type))) && write){
+            st("$L(write, $L)", network ? serializer.getNetWriter(type, null) : serializer.writers.get(type), field);
         }else if(serializer.mutatorReaders.containsKey(type) && !write && !field.replace(" = ", "").contains(" ") && !field.isEmpty()){
             st("$L$L(read, $L)", field, serializer.mutatorReaders.get(type), field.replace(" = ", ""));
-        }else if(serializer.readers.containsKey(type) && !write){
-            st("$L$L(read)", field, serializer.readers.get(type));
+        }else if((serializer.readers.containsKey(type) || (network && serializer.netReaders.containsKey(type))) && !write){
+            st("$L$L(read)", field, network ? serializer.getNetReader(type, null) : serializer.readers.get(type));
         }else if(type.endsWith("[]")){
             String rawType = type.substring(0, type.length() - 2);
 
             if(write){
                 s("i", field + ".length");
                 cont("for(int INDEX = 0; INDEX < $L.length; INDEX ++)", field);
-                io(proc, rawType, field + "[INDEX]");
+                io(proc, rawType, field + "[INDEX]", network);
             }else{
                 String fieldName = field.replace(" = ", "").replace("this.", "");
                 String lenf = fieldName + "_LENGTH";
@@ -163,7 +164,7 @@ public class EntityIO{
                     st("$Lnew $L[$L]", field, type.replace("[]", ""), lenf);
                 }
                 cont("for(int INDEX = 0; INDEX < $L; INDEX ++)", lenf);
-                io(proc, rawType, field.replace(" = ", "[INDEX] = "));
+                io(proc, rawType, field.replace(" = ", "[INDEX] = "), network);
             }
 
             econt();
@@ -175,7 +176,7 @@ public class EntityIO{
                 if(write){
                     s("i", field + ".size");
                     cont("for(int INDEX = 0; INDEX < $L.size; INDEX ++)", field);
-                    io(proc, generic, field + ".get(INDEX)");
+                    io(proc, generic, field + ".get(INDEX)", network);
                 }else{
                     String fieldName = field.replace(" = ", "").replace("this.", "");
                     String lenf = fieldName + "_LENGTH";
@@ -184,7 +185,7 @@ public class EntityIO{
                         st("$L.clear()", field.replace(" = ", ""));
                     }
                     cont("for(int INDEX = 0; INDEX < $L; INDEX ++)", lenf);
-                    io(proc, generic, field.replace(" = ", "_ITEM = ").replace("this.", generic + " "));
+                    io(proc, generic, field.replace(" = ", "_ITEM = ").replace("this.", generic + " "), network);
                     if(!field.isEmpty()){
                         String temp = field.replace(" = ", "_ITEM").replace("this.", "");
                         st("if($L != null) $L.add($L)", temp, field.replace(" = ", ""), temp);

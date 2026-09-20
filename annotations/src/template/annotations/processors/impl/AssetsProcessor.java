@@ -1,12 +1,18 @@
 package template.annotations.processors.impl;
 
+import arc.*;
 import arc.audio.*;
 import arc.files.*;
+import arc.graphics.g2d.*;
 import arc.struct.*;
 import arc.util.*;
 import arc.util.io.*;
+
 import com.squareup.javapoet.*;
+
 import mindustry.*;
+import mindustry.ui.*;
+
 import template.annotations.processors.*;
 
 import javax.annotation.processing.*;
@@ -49,7 +55,7 @@ public class AssetsProcessor extends BaseProcessor{
 
                     @Override
                     public void load(MethodSpec.Builder builder){
-                        builder.addStatement("return $T.tree.loadSound($S + name)", cName(Vars.class), directory() + "/");
+                        builder.addStatement("return $T.tree.loadSound(name)", cName(Vars.class));
                     }
                 },
                 new Asset(){
@@ -104,7 +110,6 @@ public class AssetsProcessor extends BaseProcessor{
                 boolean useProp = a.properties();
 
                 Fi propFile = rootDir.child("main/assets/" + a.directory() + "/" + a.propertyFile());
-                Log.info("Asset properties file path: "+"main/assets/" + a.directory() + "/" + a.propertyFile());
                 ObjectMap<String, String> temp = null;
                 if(useProp && propFile.exists()) {
                     PropertiesUtils.load(temp = new ObjectMap<>(), propFile.reader());
@@ -173,6 +178,100 @@ public class AssetsProcessor extends BaseProcessor{
                 spec.addMethod(globalLoad.build());
                 write(spec.build());
             }
+
+            TypeSpec.Builder loaderBuilder = TypeSpec.classBuilder(classPrefix + "IconLoader")
+            .addModifiers(Modifier.PUBLIC, Modifier.FINAL);
+
+            MethodSpec.Builder loadIconsMethod = MethodSpec.methodBuilder("loadIcons")
+            .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+            .addStatement("$T iconProperties = new $T()", cName(java.util.Properties.class), cName(java.util.Properties.class))
+            .beginControlFlow("try($T reader = $T.tree.get(\"icons/\" + $S + \"-icons.properties\").reader(512))", cName(java.io.Reader.class), cName(Vars.class), modName)
+            .addStatement("iconProperties.load(reader)")
+            .nextControlFlow("catch($T e)", cName(Exception.class))
+            .addStatement("return")
+            .endControlFlow()
+            .beginControlFlow("for($T.Entry<Object, Object> entry : iconProperties.entrySet())", cName(java.util.Map.class))
+            .addStatement("String codePointStr = (String)entry.getKey()")
+            .addStatement("String[] valueParts = ((String)entry.getValue()).split(\"[|]\")")
+            .addStatement("if(valueParts.length < 2) continue")
+            .beginControlFlow("try")
+            .addStatement("int codePoint = Integer.parseInt(codePointStr)")
+            .addStatement("String contentName = valueParts[0]")
+            .addStatement("String textureName = valueParts[1]")
+            .addStatement("$T region = $T.atlas.find(textureName)", cName(TextureRegion.class), cName(Core.class))
+            .addStatement("$T.registerIcon(contentName, textureName, codePoint, region)", cName(Fonts.class))
+            .addStatement("$T iconFont = $T.icon", cName(Font.class), cName(Fonts.class))
+            .addStatement("int size = (int)(iconFont.getData().lineHeight / iconFont.getData().scaleY)")
+            .addStatement("$T out = $T.fit.apply(region.width, region.height, size, size)", cName(arc.math.geom.Vec2.class), cName(Scaling.class))
+            .addStatement("$T glyph = new $T()", cName(Font.Glyph.class), cName(Font.Glyph.class))
+            .addStatement("glyph.id = codePoint")
+            .addStatement("glyph.srcX = 0")
+            .addStatement("glyph.srcY = 0")
+            .addStatement("glyph.width = (int)out.x")
+            .addStatement("glyph.height = (int)out.y")
+            .addStatement("glyph.u = region.u")
+            .addStatement("glyph.v = region.v2")
+            .addStatement("glyph.u2 = region.u2")
+            .addStatement("glyph.v2 = region.v")
+            .addStatement("glyph.xoffset = (size - glyph.width) / 2")
+            .addStatement("glyph.yoffset = (size - glyph.height) / 2 - size")
+            .addStatement("glyph.xadvance = size")
+            .addStatement("glyph.kerning = null")
+            .addStatement("glyph.fixedWidth = true")
+            .addStatement("glyph.page = 0")
+            .addStatement("iconFont.getData().setGlyph(codePoint, glyph)")
+
+            .nextControlFlow("catch($T ignored)", cName(Exception.class))
+            .endControlFlow()
+            .endControlFlow();
+            loaderBuilder.addMethod(loadIconsMethod.build());
+
+            write(loaderBuilder.build());
+
+            TypeSpec.Builder iconcBuilder = TypeSpec.classBuilder(classPrefix + "Iconc")
+            .addModifiers(Modifier.PUBLIC, Modifier.FINAL);
+
+            ObjectMap<String, String> iconMap = new OrderedMap<>();
+            Fi iconPropFile = rootDir.child("main/assets/icons/" + modName + "-icons.properties");
+            if(iconPropFile.exists()){
+                PropertiesUtils.load(iconMap, iconPropFile.reader());
+            }
+
+            StringBuilder iconcAll = new StringBuilder();
+            CodeBlock.Builder iconcStatic = CodeBlock.builder();
+
+            iconcBuilder.addField(FieldSpec.builder(ParameterizedTypeName.get(ObjectIntMap.class, String.class),
+            "codes", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL).initializer("new ObjectIntMap<>()").build());
+
+            iconcBuilder.addField(FieldSpec.builder(ParameterizedTypeName.get(IntMap.class, String.class),
+            "codeToName", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL).initializer("new IntMap<>()").build());
+
+            iconMap.each((key, val) -> {
+                String[] split = val.split("\\|");
+                if(split.length < 2) return;
+
+                String contentName = split[0];
+                int code = Integer.parseInt(key);
+                String name = Strings.kebabToCamel(contentName);
+
+                if(javax.lang.model.SourceVersion.isKeyword(name)) name += "s";
+
+                iconcAll.append((char)code);
+
+                iconcBuilder.addField(FieldSpec.builder(char.class, name, Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
+                .addJavadoc(String.format("\\u%04x", code))
+                .initializer("'" + ((char)code) + "'").build());
+
+                iconcStatic.addStatement("codes.put($S, $L)", name, code);
+                iconcStatic.addStatement("codeToName.put($L, $S)", code, name);
+            });
+
+            iconcBuilder.addField(FieldSpec.builder(String.class, "all", Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
+            .initializer("$S", iconcAll.toString()).build());
+
+            iconcBuilder.addStaticBlock(iconcStatic.build());
+
+            write(iconcBuilder.build());
         }
     }
 

@@ -11,9 +11,10 @@ import java.util.concurrent.*;
  */
 public final class Processors{
     private static final Processor[] processes = {
-            new OutlineRegionProcessor(),
-            new UnitProcessor(),
-            new StatusEffectProcessor()
+    new OutlineRegionProcessor(),
+    new UnitProcessor(),
+    new ItemProcessor(),
+    new BlockProcessor()
     };
 
     private Processors(){}

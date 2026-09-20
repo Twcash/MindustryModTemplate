@@ -219,11 +219,21 @@ public class UnitProcessor implements Processor{
                         }
                     }
 
+                    if(unit instanceof Tankc){
+                        GenRegion treads = conv(type.treadRegion);
+                        if(treads.found()){
+                            Pixmap outlinedTreads = Pixmaps.outline(new PixmapRegion(treads.pixmap()), type.outlineColor, type.outlineRadius);
+                            DrawInstruction treadsInstr = new DrawInstruction(outlinedTreads, 0, 0, -0.05f);
+                            treadsInstr.tempFlipped = outlinedTreads;
+                            instructions.add(treadsInstr);
+                        }
+                    }
+
                     type.weapons.select(w -> w.layerOffset < 0).each(weapon -> {
                         GenRegion preview = weaponPreviews.get(weapon);
                         if(preview == null || !preview.found()) return;
                         Pixmap pix = preview.pixmap();
-                        DrawInstruction instr = new DrawInstruction(pix, weapon.x / scl, -weapon.y / scl, weapon.layerOffset);
+                        DrawInstruction instr = new DrawInstruction(pix, weapon.x / scl, -weapon.y / scl, weapon.layerOffset - 0.01f);
                         if(weapon.flipSprite){
                             instr.tempFlipped = pix.flipX();
                             instr.pixmap = instr.tempFlipped;
@@ -243,14 +253,14 @@ public class UnitProcessor implements Processor{
                     GenRegion cellRegion = conv(type.cellRegion);
                     if(cellRegion.found()){
                         tintedCell = tintCell(cellRegion);
-                        instructions.add(new DrawInstruction(tintedCell, 0, 0, 0.1f));
+                        instructions.add(new DrawInstruction(tintedCell, 0, 0, 0.01f));
                     }
 
                     type.weapons.select(w -> w.layerOffset >= 0).each(weapon -> {
                         GenRegion preview = weaponPreviews.get(weapon);
                         if(preview == null || !preview.found()) return;
                         Pixmap pix = preview.pixmap();
-                        DrawInstruction instr = new DrawInstruction(pix, weapon.x / scl, -weapon.y / scl, weapon.layerOffset);
+                        DrawInstruction instr = new DrawInstruction(pix, weapon.x / scl, -weapon.y / scl, weapon.layerOffset + 0.1f);
                         if(weapon.flipSprite){
                             instr.tempFlipped = pix.flipX();
                             instr.pixmap = instr.tempFlipped;
@@ -267,20 +277,22 @@ public class UnitProcessor implements Processor{
 
                     instructions.sort(i -> i.layerOffset);
 
-                    Rect bounds = Tmp.r1.set(0, 0, 0, 0);
-                    Rect totalBounds = Tmp.r2.set(0, 0, 0, 0);
-                    boolean first = true;
+                    Rect bounds = new Rect();
+                    float maxAbsX = 0, maxAbsY = 0;
                     for(DrawInstruction instr : instructions){
-                        if(first){ totalBounds.set(instr.bounds(bounds)); first = false; }
-                        else{ totalBounds.merge(instr.bounds(bounds)); }
+                        instr.bounds(bounds);
+                        maxAbsX = Math.max(maxAbsX, Math.abs(bounds.x));
+                        maxAbsX = Math.max(maxAbsX, Math.abs(bounds.x + bounds.width));
+                        maxAbsY = Math.max(maxAbsY, Math.abs(bounds.y));
+                        maxAbsY = Math.max(maxAbsY, Math.abs(bounds.y + bounds.height));
                     }
 
-                    int finalWidth = Math.max(1, Mathf.ceil(totalBounds.width));
-                    int finalHeight = Math.max(1, Mathf.ceil(totalBounds.height));
+                    int finalWidth = Math.max(1, Mathf.ceil(maxAbsX * 2f));
+                    int finalHeight = Math.max(1, Mathf.ceil(maxAbsY * 2f));
                     compositeIcon = new Pixmap(finalWidth, finalHeight);
 
-                    float originX = -totalBounds.x;
-                    float originY = -totalBounds.y;
+                    float originX = finalWidth / 2f;
+                    float originY = finalHeight / 2f;
                     for(DrawInstruction instr : instructions){
                         Pixmap pix = instr.pixmap;
                         int drawX = Mathf.floor(originX + instr.offsetX - pix.width / 2f);
@@ -300,13 +312,22 @@ public class UnitProcessor implements Processor{
                     if(fullRegion.found()) fullIconPixmap = fullRegion.pixmap();
                 }
 
+                if(fullIconPixmap != null){
+                    String uiIconName = type.name + "-ui";
+                    if(!atlas.has(uiIconName)){
+                        GenRegion uiRegion = new GenRegion(uiIconName, fullIconPixmap.copy());
+                        uiRegion.relativePath = "ui";
+                        uiRegion.save(true);
+                    }
+                }
+
                 if(type.health > 0 && fullIconPixmap != null){
                     Rand rand = new Rand();
                     rand.setSeed(type.name.hashCode());
                     int splits = 3;
                     float degrees = rand.random(360f);
                     float offsetRange = Math.max(fullIconPixmap.width, fullIconPixmap.height) * 0.15f;
-                    Vec2 offset = Tmp.v1.set(1, 1).rotate(rand.random(360f)).setLength(rand.random(0, offsetRange)).add(fullIconPixmap.width / 2f, fullIconPixmap.height / 2f);
+                    Vec2 offset = new Vec2(1, 1).rotate(rand.random(360f)).setLength(rand.random(0, offsetRange)).add(fullIconPixmap.width / 2f, fullIconPixmap.height / 2f);
                     VoronoiNoise voronoi = new VoronoiNoise(type.id, true);
 
                     final Pixmap sourcePixmapForWrecks = fullIconPixmap;

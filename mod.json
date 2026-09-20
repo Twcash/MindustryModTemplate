@@ -4,7 +4,7 @@
     "author": "Someone",
     "description": "No description provided",
     "version": "1.0",
-    "minGameVersion": 151.1,
+    "minGameVersion": 160.5,
     "main": "template.Template",
     "java": true,
     "hideBrowser": true

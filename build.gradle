@@ -4,12 +4,11 @@ def modJson = new File(rootDir, 'mod.json')
 def modInfo = new JsonSlurper().parseText(modJson.text)
 
 ext {
-    javaVersion = 17
     modName = modInfo.name
     modDisplayName = modInfo.displayName.toString().replaceAll(/\s+/, '')
     modVersion = modInfo.version
 
-    classPrefix = project.getProperty('classPrefix').toString().replaceAll(/\s+/, '') ?: modDisplayName
+    classPrefix = (project.hasProperty('classPrefix') ? project.getProperty('classPrefix').toString().replaceAll(/\s+/, '') : "") ?: modDisplayName
 }
 
 buildscript{
@@ -17,13 +16,13 @@ buildscript{
         classpath "com.github.Anuken.Arc:arc-core:$arcVersion"
         classpath "com.github.Anuken.Mindustry:core:$mindustryVersion"
         classpath "com.squareup:javapoet:$javapoetVersion"
-        classpath "com.github.Anuken:jabel:$jabelVersion"
     }
 
     repositories{
         mavenCentral()
+        maven{ url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository"}
         maven{ url "https://maven.xpdustry.com/mindustry" }
-        maven{ url 'https://jitpack.io' }
+        maven{ url "https://jitpack.io" }
     }
 }
 
@@ -50,6 +49,7 @@ allprojects{
 
     repositories{
         mavenCentral()
+        maven{ url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository"}
         maven{ url "https://maven.xpdustry.com/mindustry" }
         maven{ url "https://jitpack.io" }
     }
@@ -77,8 +77,6 @@ allprojects{
     }
 
     tasks.withType(JavaCompile){
-        sourceCompatibility = rootProject.ext.javaVersion
-        targetCompatibility = rootProject.ext.javaVersion
         options.incremental = true
         options.encoding = 'UTF-8'
         options.compilerArgs += '-Xlint:deprecation'
