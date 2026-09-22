@@ -1,11 +1,11 @@
 {
-    "name": "template",
-    "displayName": "Template",
-    "author": "Someone",
+    "name": "rout",
+    "displayName": "rout",
+    "author": "twcash/pitchblende",
     "description": "No description provided",
     "version": "1.0",
     "minGameVersion": 160.5,
-    "main": "template.Template",
+    "main": "rout.Rout",
     "java": true,
     "hideBrowser": true
 }
