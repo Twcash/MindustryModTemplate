@@ -1,12 +1,16 @@
 package rout.content;
 
 import arc.func.Cons;
+import arc.graphics.Color;
 import arc.math.Interp;
+import arc.struct.Seq;
 import mindustry.content.Fx;
 import mindustry.content.Liquids;
 import mindustry.content.UnitTypes;
 import mindustry.ctype.UnlockableContent;
 import mindustry.entities.bullet.BasicBulletType;
+import mindustry.entities.part.DrawPart;
+import mindustry.entities.pattern.ShootAlternate;
 import mindustry.graphics.Layer;
 import mindustry.type.Category;
 import mindustry.type.ItemStack;
@@ -31,9 +35,12 @@ import rout.world.blocks.power.RouterBattery;
 import rout.world.blocks.power.RouterGenerator;
 import rout.world.blocks.production.RoutDrill;
 import rout.world.blocks.turrets.RouterItemTurret;
+import rout.world.blocks.turrets.RouterPayloadTurret;
 import rout.world.draw.drawers.DrawCutoff;
 import rout.world.draw.drawers.DrawHammer;
 import rout.world.draw.drawers.DrawInverse;
+import rout.world.draw.drawers.RoutDrawTurret;
+import rout.world.entities.draw.NewRegPart;
 
 import static mindustry.type.ItemStack.with;
 
@@ -59,7 +66,7 @@ public class RoutBlocks {
     //liquid
             liquidRouter2,
     //turrets
-            routerTurret,
+            routerTurret, detour,
     //power
             routerTurbine, routerBattery;
 
@@ -97,18 +104,7 @@ public class RoutBlocks {
             spreadInterval = 0.5f;
             coreMerge = true;
         }};
-        routerTurret = new RouterItemTurret("router-turret"){{
-            requirements(Category.defense, with(RoutItems.routerFragment, 4));
-            size = 1;
-            scaledHealth = 100;
-            ammo(RoutItems.routerFragment, new BasicBulletType(2, 40){{
-                width = 4;
-                height = 6;
-                smokeEffect = Fx.shootSmallSmoke;
-                shootEffect = Fx.shootSmallColor;
-                hitEffect = despawnEffect = Fx.hitBulletSmall;
-            }});
-        }};
+
         routerWall = new RouterBlock("router-wall"){{
             requirements(Category.defense, with(RoutItems.routerFragment, 8));
             size = 1;
@@ -276,7 +272,52 @@ public class RoutBlocks {
             deconstructionResults.put(liquidRouter2, ItemStack.with(RoutItems.clearRouter, 5));
             deconstructionResults.put(routerBattery, ItemStack.with(RoutItems.yellowRouterium, 10));
         }};
-
-
+        routerTurret = new RouterItemTurret("router-turret"){{
+            requirements(Category.defense, with(RoutItems.routerFragment, 4));
+            size = 1;
+            scaledHealth = 100;
+            reload = 20;
+            shoot = new ShootAlternate(3);
+            shoot.shots = 2;
+            maxAmmo = 20;
+            range = 150;
+            outlineColor = Color.valueOf("30313b");
+            ammo(RoutItems.routerDust, new BasicBulletType(2, 10, "router-bullet"){{
+                width = 8;
+                height = 12;
+                smokeEffect = Fx.shootSmallSmoke;
+                shootEffect = Fx.shootSmallColor;
+                hitEffect = despawnEffect = Fx.hitBulletSmall;
+            }});
+        }};
+        detour = new RouterPayloadTurret("detour"){{
+            requirements(Category.defense, with(RoutItems.routerFragment, 40, RoutItems.routerium, 10));
+            size = 2;
+            reload = 90;
+            scaledHealth = 300;
+            shoot.firstShotDelay = 20;
+            maxAmmo = 5;
+            range = 250;
+            outlineColor = Color.valueOf("30313b");
+            ammo(RoutBlocks.routerWall, new BasicBulletType(2, 60, "router-bullet"){{
+                scaleLife = true;
+                splashDamageRadius = 24;
+                splashDamage = 50;
+                width = 8;
+                height = 8;
+                shrinkX = shrinkY = 0.5f;
+                trailLength = 12;
+                trailWidth = 2;
+            }});
+            drawer = new RoutDrawTurret(){{
+                setAmmoParts(routerWall, Seq.with(new NewRegPart(){{
+                    name = "rout-router-bullet";
+                    progress = DrawPart.PartProgress.reload.curve(Interp.pow5In);
+                    alphaTo = 0;
+                    under = true;
+                    alpha = 1;
+                }}));
+            }};
+        }};
     }
 }
