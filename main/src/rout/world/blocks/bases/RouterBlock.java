@@ -12,6 +12,7 @@ public class RouterBlock extends Block {
     public boolean canPlaceOutsideRouter = false;
     public RouterBlock(String name) {
         super(name);
+        update = true;
     }
 
     @Override

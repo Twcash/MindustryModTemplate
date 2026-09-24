@@ -23,7 +23,7 @@ public class DrawHammer extends DrawRegion {
     public float x, y = 0;
     public TextureRegion hammer;
     public float pow = 4;
-    public float max = 1.2f;
+    public float max = 0.25f;
     public float uprot = 0;
     public Interp interp = Interp.linear;
     public float shadowElevation = 2;
@@ -36,13 +36,14 @@ public class DrawHammer extends DrawRegion {
     @Override
     public void draw(Building build){
         float progress = interp.apply(build.progress());
-        float scl = 1 * (1.2f*-(Mathf.pow(((2*(progress-1))),pow)+1));
+        float scl = 1+(progress*max);
         Draw.color(Pal.shadow);
-        Drawf.spinSprite(hammer, build.x + x-(shadowElevation*progress), build.y + y-(shadowElevation*progress), uprot * progress);
+        Draw.scl(scl);
+        Draw.rect(hammer, build.x + x-(shadowElevation*progress), build.y + y-(shadowElevation*progress), uprot * progress);
         Draw.color();
         Draw.alpha(1);
-        Draw.scl(scl);
         Drawf.spinSprite(hammer, build.x + x, build.y + y, uprot * progress);
+        Draw.scl();
     }
     @Override
     public TextureRegion[] icons(Block block){
