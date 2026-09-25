@@ -3,6 +3,7 @@ package rout;
 import arc.*;
 import arc.struct.ObjectMap;
 import arc.struct.ObjectSet;
+import arc.util.Log;
 import arc.util.Time;
 import mindustry.game.Team;
 import mindustry.game.EventType.*;
@@ -58,6 +59,63 @@ public class Rout extends Mod{
 
     @Override
     public void init(){
+        //Register the router core's launch loadout here (after Schematics.load() wipes
+        //loadouts), so launching to adjacent sectors uses the core itself instead of
+        //falling back to coreShard's copper-requiring loadout.
+        RoutLoadouts.registerLoadouts();
+
+        //Diagnostics: capture the exact rule/sector state at the moments that matter.
+        //postGenerate already logs a healthy state, so whatever insta-captures the sector
+        //must be changing it afterwards — these hooks catch it in the act.
+        Events.on(WorldLoadEvent.class, e -> {
+            if(!state.isCampaign() || state.rules.sector == null) return;
+
+            //state.rules can be a fresh object by the time gameplay starts, discarding
+            //everything generate() wrote to it (observed: winWave=0, waveSpacing=7200
+            //defaults at runtime while postGenerate logged winWave=25). sector.info is the
+            //durable channel, so re-assert the wave rules from it here.
+            var info = state.rules.sector.info;
+            if(info.winWave > 0) state.rules.winWave = info.winWave;
+            if(info.waveSpacing > 0f) state.rules.waveSpacing = info.waveSpacing;
+            state.rules.waves = info.waves;
+            state.rules.attackMode = info.attack;
+
+            Log.info("[rout] WORLDLOAD sector=@ waves=@ winWave=@ wave=@ attackMode=@ spawns=@ playerCores=@ canGameOver=@ core=@ loadout=@ waveSpacing=@ initialWaveSpacing=@ | info(winWave=@ waveSpacing=@ waves=@ attack=@)",
+                state.rules.sector.id, state.rules.waves, state.rules.winWave, state.wave,
+                state.rules.attackMode, spawner.countSpawns(), state.teams.playerCores().size,
+                state.rules.canGameOver, state.rules.defaultTeam.core(), state.rules.loadout.size,
+                state.rules.waveSpacing, state.rules.initialWaveSpacing,
+                info.winWave, info.waveSpacing, info.waves, info.attack);
+        });
+
+        Events.on(WaveEvent.class, e -> {
+            Log.info("[rout] WAVE @ enemies=@ spawns=@ winWave=@ waves=@ attackMode=@",
+                state.wave, state.enemies, spawner.countSpawns(), state.rules.winWave,
+                state.rules.waves, state.rules.attackMode);
+        });
+
+        Events.on(SectorCaptureEvent.class, e -> {
+            Log.info("[rout] CAPTURED sector=@ initial=@ tick=@ waves=@ winWave=@ wave=@ attackMode=@ spawns=@ playerCores=@ enemies=@ gameOver=@ isBeingPlayed=@ isCaptured=@ hasBase=@ info(waves=@ attack=@ hasCore=@ wasCaptured=@ save=@)",
+                e.sector.id, e.initialCapture, state.tick, state.rules.waves, state.rules.winWave,
+                state.wave, state.rules.attackMode, spawner.countSpawns(), state.teams.playerCores().size,
+                state.enemies, state.gameOver, e.sector.isBeingPlayed(), e.sector.isCaptured(),
+                e.sector.hasBase(), e.sector.info.waves, e.sector.info.attack, e.sector.info.hasCore,
+                e.sector.info.wasCaptured, e.sector.save != null);
+        });
+
+        Events.on(SaveLoadEvent.class, e -> {
+            if(!state.isCampaign()) return;
+            Log.info("[rout] SAVELOAD isMap=@ sector=@ waves=@ winWave=@ wave=@ attackMode=@ spawns=@ playerCores=@ info(waves=@ attack=@ winWave=@ hasCore=@ wasCaptured=@)",
+                e.isMap, state.rules.sector == null ? -1 : state.rules.sector.id,
+                state.rules.waves, state.rules.winWave, state.wave, state.rules.attackMode,
+                spawner.countSpawns(), state.teams.playerCores().size,
+                state.rules.sector == null ? null : state.rules.sector.info.waves,
+                state.rules.sector == null ? null : state.rules.sector.info.attack,
+                state.rules.sector == null ? null : state.rules.sector.info.winWave,
+                state.rules.sector == null ? null : state.rules.sector.info.hasCore,
+                state.rules.sector == null ? null : state.rules.sector.info.wasCaptured);
+        });
+
         //Per-tile tracking of how long they've been orphaned. Cleared when the tile
         //is no longer orphaned (or after the revert/die action fires).
         ObjectMap<Tile, Float> orphanFloorSince = new ObjectMap<>();
@@ -100,6 +158,11 @@ public class Rout extends Mod{
                 if(!tile.isCenter()) continue;
 
                 if(tile.floor() == RoutBlocks.richRouterFloor.asFloor() || tile.floor() == RoutBlocks.routerFloor.asFloor()){
+                    //never revert a tile carrying an enemy spawn overlay — wiping it drops
+                    //spawner.countSpawns() to 0, which makes Logic.checkGameState() disable
+                    //waves and instantly capture the sector.
+                    if(tile.overlay() == mindustry.content.Blocks.spawn) continue;
+
                     if(!covered.contains(tile)){
                         Float start = orphanFloorSince.get(tile);
                         if(start == null){

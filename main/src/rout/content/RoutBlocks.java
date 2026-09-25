@@ -36,6 +36,7 @@ import rout.world.blocks.power.RouterGenerator;
 import rout.world.blocks.production.RoutDrill;
 import rout.world.blocks.turrets.RouterItemTurret;
 import rout.world.blocks.turrets.RouterPayloadTurret;
+import rout.world.draw.RoutFx;
 import rout.world.draw.drawers.DrawCutoff;
 import rout.world.draw.drawers.DrawHammer;
 import rout.world.draw.drawers.DrawInverse;
@@ -230,6 +231,8 @@ public class RoutBlocks {
             filter.add(liquidRouter2);
             recipeRequirements.put(liquidRouter2, ItemStack.empty);
             recipeLiquids.put(liquidRouter2, LiquidStack.with(Liquids.slag, 4));
+            recipeRequirements.put(routerWall, ItemStack.with(RoutItems.routerFragment, 4));
+            filter.add(routerWall);
         }};
         routerTurbine = new RouterGenerator("router-turbine"){{
             requirements(Category.power, with(RoutItems.routerium, 75, RoutItems.clearRouter, 10, RoutItems.routerFragment, 125));
@@ -271,9 +274,11 @@ public class RoutBlocks {
             deconstructionResults.put(ductRouter2, ItemStack.with(RoutItems.routerium, 5));
             deconstructionResults.put(liquidRouter2, ItemStack.with(RoutItems.clearRouter, 5));
             deconstructionResults.put(routerBattery, ItemStack.with(RoutItems.yellowRouterium, 10));
+            deconstructionResults.put(routerWall, ItemStack.with(RoutItems.routerDust, 30));
+
         }};
         routerTurret = new RouterItemTurret("router-turret"){{
-            requirements(Category.defense, with(RoutItems.routerFragment, 4));
+            requirements(Category.defense, with(RoutItems.routerFragment, 10, RoutItems.routerDust, 35));
             size = 1;
             scaledHealth = 100;
             reload = 20;
@@ -282,9 +287,9 @@ public class RoutBlocks {
             maxAmmo = 20;
             range = 150;
             outlineColor = Color.valueOf("30313b");
-            ammo(RoutItems.routerDust, new BasicBulletType(2, 10, "router-bullet"){{
-                width = 8;
-                height = 12;
+            ammo(RoutItems.routerDust, new BasicBulletType(2, 11, "rout-router-bullet"){{
+                width = 4;
+                height = 4;
                 smokeEffect = Fx.shootSmallSmoke;
                 shootEffect = Fx.shootSmallColor;
                 hitEffect = despawnEffect = Fx.hitBulletSmall;
@@ -295,9 +300,9 @@ public class RoutBlocks {
             size = 2;
             reload = 90;
             scaledHealth = 300;
-            shoot.firstShotDelay = 20;
             maxAmmo = 5;
             range = 250;
+            shootY = 0;
             outlineColor = Color.valueOf("30313b");
             ammo(RoutBlocks.routerWall, new BasicBulletType(2, 60, "router-bullet"){{
                 scaleLife = true;
@@ -308,13 +313,12 @@ public class RoutBlocks {
                 shrinkX = shrinkY = 0.5f;
                 trailLength = 12;
                 trailWidth = 2;
+                hitEffect = despawnEffect = RoutFx.hitRouter;
             }});
             drawer = new RoutDrawTurret(){{
-                setAmmoParts(routerWall, Seq.with(new NewRegPart(){{
-                    name = "rout-router-bullet";
+                setAmmoParts(routerWall, Seq.with(new NewRegPart("-router-wall"){{
                     progress = DrawPart.PartProgress.reload.curve(Interp.pow5In);
                     alphaTo = 0;
-                    under = true;
                     alpha = 1;
                 }}));
             }};

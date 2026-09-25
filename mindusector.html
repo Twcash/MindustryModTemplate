@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MINDUSECTOR</title>
+<style>
+  :root{--bg:#16171b;--panel:#202127;--line:#2f3037;--text:#d7d8dc;--muted:#9a9ba3;--accent:#4da3ff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;overflow:hidden}
+  #app{display:flex;height:100vh}
+  #worldWrap{flex:1;position:relative;overflow:hidden;background:#121317}
+  #world{position:absolute;top:0;left:0;transform-origin:0 0}
+  svg#wires{position:absolute;top:0;left:0;overflow:visible;pointer-events:none;z-index:1}
+  .node{position:absolute;width:220px;background:var(--bg);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.4);user-select:none;z-index:2}
+  .node.dragging{box-shadow:0 0 0 2px var(--accent),0 10px 28px rgba(0,0,0,.7);z-index:10}
+  .node .head{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-radius:7px 7px 0 0;cursor:grab;font-weight:700;font-size:11px;letter-spacing:.5px;color:#111}
+  .node .head .del{background:none;border:none;color:#111;cursor:pointer;font-size:14px;font-weight:800;opacity:.7}
+  .node .head .del:hover{opacity:1}
+  .node .body{padding:6px 4px 8px}
+  .row{position:relative;display:flex;align-items:center;gap:5px;margin:3px 0;flex-wrap:wrap;min-height:22px}
+  .row label{color:var(--muted);font-size:11px;min-width:40px}
+  .row select,.row input[type=number]{background:var(--bg);border:1px solid var(--line);color:var(--text);padding:2px 4px;border-radius:4px;font-family:Consolas,monospace;font-size:11px}
+  .row input[type=range]{flex:1;min-width:60px;accent-color:var(--accent)}
+  .row .val{color:var(--accent);font-family:Consolas,monospace;font-size:11px;min-width:36px;text-align:right}
+  .row .slot{position:absolute;top:50%;transform:translateY(-50%);width:14px;height:14px;border-radius:50%;background:var(--bg);border:3px solid #ffb347;cursor:crosshair;flex-shrink:0;transition:transform .08s,box-shadow .08s;box-shadow:0 0 0 0 rgba(255,179,71,0);z-index:4}
+  .row .slot.in{left:-8px}
+  .row .slot.out{right:-8px;background:#4ade80;border-color:#4ade80;box-shadow:0 0 6px rgba(74,222,128,.6)}
+  .row.pin{padding-left:18px}
+  .row.pinout{padding-right:18px;padding-left:8px}
+  .row .slot:hover{transform:translateY(-50%) scale(1.25);box-shadow:0 0 10px rgba(255,179,71,.9)}
+  .row .slot.out:hover{box-shadow:0 0 10px rgba(74,222,128,.9)}
+  .type-noise .row.noise-fall,.type-noise .row.noise-oct,.type-noise .row.noise-warp{display:none}
+  .type-noise.k-simplex .noise-oct,.type-noise.k-simplex .noise-fall,.type-noise.k-simplex .noise-warp{display:flex}
+  .type-noise.k-ridged .noise-oct{display:flex}
+  .type-noise.k-dist .noise-scale{display:none}
+  #tempWire{position:absolute;top:0;left:0;overflow:visible;pointer-events:none;z-index:3}
+  .row .expr{flex:1;background:var(--bg);border:1px solid var(--line);color:var(--text);padding:3px 4px;border-radius:4px;font-family:Consolas,monospace;font-size:11px}
+  .type-noise .head{background:#7aa2f7}
+  .type-math .head{background:#bb9af7}
+  .type-function .head{background:#7dcfff}
+  .type-floorCheck .head{background:#f7768e}
+  .type-rule .head{background:#e0af68}
+  .type-output .head{background:#9ece6a}
+  #previewNode{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px;z-index:4;box-shadow:0 4px 14px rgba(0,0,0,.5);pointer-events:none}
+  #previewNode .lab{font-size:11px;color:var(--muted);margin-bottom:4px}
+  #cv{image-rendering:pixelated;border:1px solid var(--line);background:#1a1b20;width:200px;height:200px}
+  #panel{width:380px;min-width:380px;height:100%;overflow-y:auto;background:var(--panel);border-left:1px solid var(--line);padding:14px;z-index:6}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 12px;font-size:12px}
+  .toprow{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
+  input[type=number]{background:var(--bg);border:1px solid var(--line);color:var(--text);padding:3px 6px;border-radius:4px;font-family:Consolas,monospace}
+  .btn{background:var(--accent);border:none;color:#111;padding:5px 10px;border-radius:5px;cursor:pointer;font-weight:600}
+  .btn:hover{filter:brightness(1.1)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);font-weight:400}
+  .addrow{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+  .export{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;margin-top:12px}
+  .export textarea{width:100%;height:200px;background:#101116;color:#9fe89f;border:1px solid var(--line);border-radius:4px;font-family:Consolas,monospace;font-size:11px;padding:6px;resize:vertical}
+  .export .btn{margin-bottom:6px}
+  .hint{color:var(--muted);font-size:11px;margin-top:6px;line-height:1.5}
+  kbd{background:var(--bg);border:1px solid var(--line);padding:0 4px;border-radius:3px}
+  #ctxMenu{display:none;position:absolute;width:190px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.6);z-index:50;padding:6px;font-size:12px}
+  #ctxMenu input{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);padding:4px 6px;border-radius:4px;margin-bottom:6px;font-family:Consolas,monospace}
+  #ctxList{max-height:280px;overflow-y:auto}
+  .ctx-item{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:4px;cursor:pointer}
+  .ctx-item:hover{background:var(--bg)}
+  .ctx-item .dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+  .ctx-item .cn{color:var(--text)}
+  .ctx-item .desc{color:var(--muted);font-size:10px;margin-left:auto;white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="worldWrap">
+    <div id="world">
+      <svg id="wires"></svg>
+      <svg id="tempWire"></svg>
+      <div id="nodes"></div>
+      <div id="previewNode">
+        <div class="lab">map preview</div>
+        <canvas id="cv" width="200" height="200"></canvas>
+      </div>
+    </div>
+    <div id="ctxMenu">
+      <input type="text" id="ctxSearch" placeholder="search nodes…" autocomplete="off">
+      <div id="ctxList"></div>
+    </div>
+  </div>
+  <div id="panel">
+    <div class="export">
+      <button class="btn" id="expJava">Export Java</button>
+      <button class="btn ghost" id="impJava">Import Java</button>
+      <textarea id="code" placeholder="Exported code appears here… paste Java here then click Import"></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+const MathfShim = {
+  sin:Math.sin, cos:Math.cos, tan:Math.tan, sqrt:Math.sqrt, pow:Math.pow,
+  exp:Math.exp, log:Math.log, abs:Math.abs, min:Math.min, max:Math.max,
+  floor:Math.floor, ceil:Math.ceil, round:Math.round,
+  clamp:(v,a,b)=>Math.min(b,Math.max(a,v)),
+  lerp:(a,b,t)=>a+(b-a)*t,
+  dst:(x1,y1,x2,y2)=>Math.hypot(x2-x1,y2-y1),
+  PI:Math.PI, E:Math.E
+};
+const lerp=(a,b,t)=>a+(b-a)*t;
+class Noise{
+  constructor(seed){
+    let s=seed>>>0||1;
+    const rand=()=>{s^=s<<13;s^=s>>>17;s^=s<<5;return(s>>>0)/4294967296;};
+    const p=[];for(let i=0;i<256;i++)p[i]=i;
+    for(let i=255;i>0;i--){const j=Math.floor(rand()*(i+1));[p[i],p[j]]=[p[j],p[i]];}
+    this.perm=new Uint8Array(512);for(let i=0;i<512;i++)this.perm[i]=p[i&255];
+  }
+  grad(h,x,y){switch(h&7){
+    case 0:return x+y;case 1:return -x+y;case 2:return x-y;case 3:return -x-y;
+    case 4:return x;case 5:return -x;case 6:return y;default:return -y;}}
+  noise2(x,y){
+    const X=Math.floor(x)&255,Y=Math.floor(y)&255;
+    x-=Math.floor(x);y-=Math.floor(y);
+    const u=x*x*x*(x*(x*6-15)+10),v=y*y*y*(y*(y*6-15)+10);
+    const p=this.perm,A=p[X]+Y,B=p[X+1]+Y;
+    return lerp(lerp(this.grad(p[p[A]],x,y),this.grad(p[p[B]],x-1,y),u),
+                lerp(this.grad(p[p[A+1]],x,y-1),this.grad(p[p[B+1]],x-1,y-1),u),v);
+  }
+}
+function fbm(n,oct,falloff,scale,x,y){
+  let sum=0,amp=1,f=1,norm=0;
+  for(let i=0;i<oct;i++){sum+=amp*n.noise2((x+i*0.13)*scale*f,(y+i*0.13)*scale*f);norm+=amp;amp*=falloff;f*=2;}
+  return sum/norm;
+}
+function ridged(n,oct,freq,x,y){
+  let sum=0,amp=1,f=1,norm=0;
+  for(let i=0;i<oct;i++){const v=n.noise2((x+i*0.17)*freq*f,(y+i*0.17)*freq*f);sum+=amp*(1-Math.abs(v));norm+=amp;amp*=0.5;f*=2;}
+  return sum/norm;
+}
+
+const FLOORS=[
+  ['sand','#d9c07a'],['darksand','#4c4c54'],['grass','#5f9e4e'],['moss','#8a7fae'],
+  ['sporeMoss','#6a5f92'],['stone','#7c7c84'],['basalt','#3d3d45'],['hotrock','#6a3030'],
+  ['magmarock','#4a1c1c'],['dirt','#7a6a4a'],['mud','#4a3a2a'],['salt','#d0d0d8'],
+  ['shale','#6a6a72'],['snow','#d7d9dd'],['iceSnow','#b8cdd9'],['ice','#a4bfcc'],
+  ['water','#4256a0'],['sandWater','#7aa0b0'],['darksandWater','#324a55'],
+  ['deepwater','#232c52'],['taintedWater','#5a5a7a'],['darksandTaintedWater','#37343f'],
+  ['deepTaintedWater','#2a2832'],['metalFloor','#8a8a95'],['metalFloorDamaged','#6a6a75'],
+  ['darkPanel1','#33333a'],['darkPanel3','#2e2e35'],['darkPanel6','#26262c'],
+  ['craters','#5a5a62'],['charr','#4a4a52']
+];
+const WALLS=[
+  ['stoneWall','#6f6f77'],['sandWall','#b09a6a'],['snowWall','#c0c4cc'],['iceWall','#a4bfcc'],
+  ['duneWall','#4a4a52'],['dirtWall','#7a6a4a'],['sporeWall','#5a5a7a'],['shaleWall','#6a6a72'],
+  ['saltWall','#c0c0c8'],['boulder','#6a6a72'],['sporeCluster','#5f4a8a'],
+  ['whiteTree','#dfe8df'],['whiteTreeDead','#8a8a8a'],['sporePine','#8a7fae'],['snowPine','#b8cdd9']
+];
+const COLORS={};
+FLOORS.forEach(f=>COLORS[f[0]]=f[1]);
+WALLS.forEach(w=>COLORS[w[0]]=w[1]);
+COLORS.air='#1a1b20';
+
+const OPS={
+  add:{n:2,js:(a,b)=>a+b},
+  sub:{n:2,js:(a,b)=>a-b},
+  mul:{n:2,js:(a,b)=>a*b},
+  div:{n:2,js:(a,b)=>b===0?0:a/b},
+  pow:{n:2,js:(a,b)=>Math.pow(a,b)},
+  min:{n:2,js:(a,b)=>Math.min(a,b)},
+  max:{n:2,js:(a,b)=>Math.max(a,b)},
+  abs:{n:1,js:a=>Math.abs(a)},
+  sin:{n:1,js:a=>Math.sin(a)},
+  cos:{n:1,js:a=>Math.cos(a)},
+  sqrt:{n:1,js:a=>Math.sqrt(Math.max(0,a))},
+  floor:{n:1,js:a=>Math.floor(a)},
+  ceil:{n:1,js:a=>Math.ceil(a)},
+  exp:{n:1,js:a=>Math.exp(a)},
+  log:{n:1,js:a=>a<=0?0:Math.log(a)},
+  clamp:{n:3,js:(a,lo,hi)=>Math.min(hi,Math.max(lo,a))},
+  lerp:{n:3,js:(a,b,t)=>a+(b-a)*t}
+};
+const OP_NAMES=Object.keys(OPS);
+let seq=1;
+function mk(type,x,y,extra={}){
+  const n=Object.assign({id:'n'+(seq++),type,x,y},extra);
+  return n;
+}
+
+let nodes=[
+  mk('output',420,320,{baseFloor:'stone',rCount:2,seed:123,width:160,height:160,normalize:true}),
+  mk('noise',40,60,{kind:'simplex',oct:4,falloff:0.55,scale:55,warp:30}),
+  mk('noise',40,210,{kind:'simplex',oct:3,falloff:0.5,scale:22,warp:15}),
+  mk('math',240,90,{op:'mul'}),
+  mk('rule',600,90,{op:'gt',val:0,lo:0,hi:0.3,logic:'and',target:'floor',block:'sand',priority:1,cCount:1}),
+  mk('floorCheck',240,260,{target:'floor',block:'sand',eq:true}),
+  mk('rule',600,270,{op:'gt',val:0,lo:0,hi:0.3,logic:'and',target:'floor',block:'moss',priority:2,cCount:1})
+];
+let noiseSeedCounter=0;
+nodes.filter(n=>n.type==='noise').forEach(n=>{n.seedOff=noiseSeedCounter++;});
+let edges=[
+  {from:'n2',to:'n4',slot:'a'},
+  {from:'n3',to:'n4',slot:'b'},
+  {from:'n4',to:'n5',slot:'v'},
+  {from:'n6',to:'n7',slot:'c1'},
+  {from:'n5',to:'n1',slot:'r1'},
+  {from:'n7',to:'n1',slot:'r2'}
+];
+
+function nodeById(id){return nodes.find(n=>n.id===id);}
+function inputsOf(id){return edges.filter(e=>e.to===id);}
+function inputFor(id,slot){const e=edges.find(e=>e.to===id&&e.slot===slot);return e?e.from:null;}
+function outputOf(id){return edges.find(e=>e.from===id);}
+
+let mapW=160,mapH=160,normalize=true;
+const NORM=160;
+
+function evalNode(id,ctx){
+  if(!id)return 0;
+  const n=nodeById(id);
+  if(!n)return 0;
+  switch(n.type){
+    case 'noise':{
+      const sizeScl=normalize?Math.max(mapW,mapH)/NORM:1;
+      const noise=ctx.noiseFor(n);
+      if(n.kind==='dist') return Math.hypot(ctx.x-mapW/2,ctx.y-mapH/2)/Math.max(mapW,mapH);
+      if(n.kind==='ridged') return ridged(noise,n.oct,1/(n.scale*sizeScl),ctx.x,ctx.y);
+      const wf=1/(n.scale*sizeScl);
+      const wx=ctx.x+n.warp*fbm(noise,2,0.5,1/(90*sizeScl),ctx.x,ctx.y);
+      const wy=ctx.y+n.warp*fbm(noise,2,0.5,1/(90*sizeScl),ctx.x,ctx.y);
+      return fbm(noise,n.oct,n.falloff,wf,wx,wy);
+    }
+    case 'math':{
+      const op=OPS[n.op];
+      const a=evalNode(inputFor(id,'a')||'',ctx)||0;
+      const b=evalNode(inputFor(id,'b')||'',ctx)||0;
+      const c=evalNode(inputFor(id,'c')||'',ctx)||0;
+      if(op.n===1)return op.js(a);
+      if(op.n===3)return op.js(a,b,c);
+      return op.js(a,b);
+    }
+    case 'function':{
+      const aCount=n.aCount||2;
+      const vals={x:ctx.x,y:ctx.y};
+      for(let i=0;i<aCount;i++){
+        const s=LETTERS[i];
+        vals[s]=evalNode(inputFor(id,s)||'',ctx)||0;
+      }
+      return evalExpr(n.expr||'',vals,aCount);
+    }
+    case 'floorCheck':{
+      const current=n.target==='floor'?ctx.floor:(ctx.block||'air');
+      const hit=current===n.block;
+      return (n.eq?hit:!hit)?1:0;
+    }
+    default:return 0;
+  }
+}
+function evalExpr(expr,vals,aCount){
+  try{
+    const letters=LETTERS.slice(0,aCount||2);
+    const args=['Mathf','x','y',...letters];
+    const f=new Function(...args,'return ('+expr+');');
+    return +f(MathfShim,vals.x,vals.y,...letters.map(s=>vals[s]))||0;
+  }catch(e){return 0;}
+}
+
+//any rules not wired in are appended by priority.
+const LETTERS='abcdefghijklmnopqrstuvwxyz'.split('');
+function ruleOrder(){
+  const out=nodes.find(n=>n.type==='output');
+  const wired=[];
+  if(out){
+    const rCount=out.rCount||2;
+    for(let i=1;i<=rCount;i++){
+      const src=inputFor(out.id,'r'+i);
+      if(src)wired.push(src);
+    }
+  }
+  const rest=nodes.filter(n=>n.type==='rule'&&!wired.includes(n.id))
+    .sort((a,b)=>(a.priority||0)-(b.priority||0));
+  return wired.map(id=>nodeById(id)).concat(rest);
+}
+
+function evalTile(noiseFor,x,y){
+  const ctx={x,y,noiseFor,floor:null,block:null};
+  const out=nodes.find(n=>n.type==='output');
+  ctx.floor=out?out.baseFloor:'stone';
+  const rules=ruleOrder();
+  for(const r of rules){
+    let ok=true;
+    const vsrc=inputFor(r.id,'v');
+    if(vsrc){
+      const val=evalNode(vsrc,ctx)||0;
+      if(r.op==='gt')ok=ok&&val>r.val;
+      else if(r.op==='lt')ok=ok&&val<r.val;
+      else if(r.op==='bt')ok=ok&&val>r.lo&&val<r.hi;
+      else if(r.op==='abslt')ok=ok&&Math.abs(val)<r.val;
+    }
+    const cCount=r.cCount||1;
+    for(let i=1;i<=cCount;i++){
+      const src=inputFor(r.id,'c'+i);
+      if(src){
+        const v=evalNode(src,ctx)||0;
+        ok=r.logic==='or'?(ok||v!==0):(ok&&v!==0);
+      }
+    }
+    if(ok){
+      if(r.target==='floor')ctx.floor=r.block;
+      else ctx.block=r.block;
+    }
+  }
+  return {floor:ctx.floor||'air',wall:ctx.block};
+}
+
+// ---------- UI / node DOM ----------
+const world=document.getElementById('world');
+const wiresSvg=document.getElementById('wires');
+const nodesEl=document.getElementById('nodes');
+let viewPan={x:0,y:0},viewZoom=1;
+
+function buildNode(n){
+  const el=document.createElement('div');
+  el.className='node type-'+n.type;
+  el.dataset.id=n.id;
+  let head='',body='';
+  const titles={noise:'NOISE',math:'MATH',function:'FUNCTION',floorCheck:'FLOOR CHECK',rule:'RULE',output:'OUTPUT'};
+  head=`<div class="head" style="background:${headColor(n.type)}"><span>${titles[n.type]}</span><button class="del">&#10005;</button></div>`;
+  body=buildBody(n);
+  el.innerHTML=head+`<div class="body">${body}</div>`;
+  return el;
+}
+function headColor(t){
+  return {'noise':'#7aa2f7','math':'#bb9af7','function':'#7dcfff','floorCheck':'#f7768e','rule':'#e0af68','output':'#9ece6a'}[t];
+}
+function sel(options,val){
+  return options.map(o=>`<option value="${o}" ${o===val?'selected':''}>${o}</option>`).join('');
+}
+function buildBody(n){
+  switch(n.type){
+    case 'noise':return `
+      <div class="row"><label>kind</label><select class="kind">
+        ${sel(['simplex','ridged','dist'],n.kind)}</select></div>
+      <div class="row noise-oct"><label>oct</label><input type="range" class="oct" min="1" max="8" step="1" value="${n.oct}"><input type="number" class="octn" value="${n.oct}" min="1" max="8" style="width:50px"></div>
+      <div class="row noise-fall"><label>fall</label><input type="range" class="fall" min="0.2" max="0.8" step="0.05" value="${n.falloff}"><input type="number" class="falln" value="${n.falloff}" min="0.2" max="0.8" step="0.05" style="width:60px"></div>
+      <div class="row noise-scale"><label>1/scale</label><input type="range" class="scl" min="10" max="150" step="1" value="${n.scale}"><input type="number" class="scln" value="${n.scale}" min="10" max="150" style="width:60px"></div>
+      <div class="row noise-warp"><label>warp</label><input type="range" class="wrp" min="0" max="60" step="1" value="${n.warp}"><input type="number" class="wrpn" value="${n.warp}" min="0" max="60" style="width:60px"></div>
+      <div class="row pinout"><span class="slot out" data-slot="out"></span><label style="min-width:0">value</label></div>`;
+    case 'math':return `
+      <div class="row"><label>op</label><select class="op">${sel(OP_NAMES,n.op)}</select></div>
+      <div class="row pin"><span class="slot in" data-slot="a"></span><label style="min-width:0">a</label></div>
+      <div class="row pin"><span class="slot in" data-slot="b"></span><label style="min-width:0">b</label></div>
+      ${OPS[n.op]&&OPS[n.op].n===3?`<div class="row pin"><span class="slot in" data-slot="c"></span><label style="min-width:0">c</label></div>`:''}
+      <div class="row pinout"><span class="slot out" data-slot="out"></span><label style="min-width:0">value</label></div>`;
+    case 'function':{
+      const aCount=n.aCount||2;
+      const ins=Array.from({length:aCount},(_,i)=>{
+        const s=LETTERS[i];
+        return `<div class="row pin"><span class="slot in" data-slot="${s}"></span><label style="min-width:0">${s}</label></div>`;
+      }).join('');
+      return `
+      <div class="row"><label style="min-width:0">f(x,y)</label><input class="expr" value="${(n.expr||'a*b').replace(/"/g,'&quot;')}"></div>
+      ${ins}
+      <div class="row"><button class="btn ghost addslot" style="padding:1px 8px">+ input</button>
+        <button class="btn ghost delslot" style="padding:1px 8px">- input</button></div>
+      <div class="row pinout"><span class="slot out" data-slot="out"></span><label style="min-width:0">value</label></div>`;
+    }
+    case 'floorCheck':return `
+      <div class="row"><label>check</label><select class="tgt">
+        <option value="floor" ${n.target==='floor'?'selected':''}>floor</option>
+        <option value="block" ${n.target==='block'?'selected':''}>block</option></select>
+        <select class="cmp"><option value="true" ${n.eq?'selected':''}>=</option><option value="false" ${!n.eq?'selected':''}>!=</option></select></div>
+      <div class="row"><label>block</label><select class="blk">${floorsWallsSel(n.block)}</select></div>
+      <div class="row pinout"><span class="slot out" data-slot="out"></span><label style="min-width:0">0/1</label></div>`;
+    case 'rule':return `
+      <div class="row"><label>prio</label><input type="number" class="prio" value="${n.priority||0}" style="width:50px"></div>
+      <div class="row pin"><span class="slot in" data-slot="v"></span><label style="min-width:0">v</label>
+        <select class="op"><option value="gt" ${n.op==='gt'?'selected':''}>&gt;</option>
+        <option value="lt" ${n.op==='lt'?'selected':''}>&lt;</option>
+        <option value="bt" ${n.op==='bt'?'selected':''}>between</option>
+        <option value="abslt" ${n.op==='abslt'?'selected':''}>|v|&lt;</option></select></div>
+      <div class="row"><label style="min-width:0">val</label><input type="number" class="val1" step="0.01" value="${n.val||0}" style="width:70px">
+        <input type="number" class="val2" step="0.01" value="${n.hi||0}" style="width:70px;${n.op==='bt'?'':'display:none'}"></div>
+      <div class="row"><label>logic</label><select class="logic">
+        <option value="and" ${n.logic!=='or'?'selected':''}>AND all</option>
+        <option value="or" ${n.logic==='or'?'selected':''}>OR any</option></select></div>
+      ${Array.from({length:n.cCount||1},(_,i)=>`<div class="row pin"><span class="slot in" data-slot="c${i+1}"></span><label style="min-width:0">c${i+1}</label></div>`).join('')}
+      <div class="row"><button class="btn ghost addslot" style="padding:1px 8px">+ cond</button>
+        <button class="btn ghost delslot" style="padding:1px 8px">- cond</button></div>
+      <div class="row"><label>set</label><select class="tgt">
+        <option value="floor" ${n.target==='floor'?'selected':''}>floor</option>
+        <option value="wall" ${n.target==='wall'?'selected':''}>wall</option></select>
+        <select class="blk">${floorsWallsSel(n.block)}</select></div>
+      <div class="row pinout"><span class="slot out" data-slot="out"></span><label style="min-width:0">to output</label></div>`;
+    case 'output':return `
+      <div class="row" style="color:var(--muted);font-size:10px;margin-top:2px">map settings</div>
+      <div class="row"><label>seed</label><input type="number" class="seed" value="${n.seed??123}" style="width:70px"></div>
+      <div class="row"><label>width</label><input type="number" class="mw" value="${n.width??160}" min="50" max="400" style="width:70px">
+        <label style="min-width:0">h</label><input type="number" class="mh" value="${n.height??160}" min="50" max="400" style="width:70px"></div>
+      <div class="row"><label>norm</label><input type="checkbox" class="norm" ${n.normalize!==false?'checked':''}><span style="color:var(--muted);font-size:11px">scale freq with size</span></div>
+      <div class="row" style="margin-top:6px"><label>base</label><select class="blk">${floorsSel(n.baseFloor)}</select></div>
+      <div class="row" style="margin-top:6px;color:var(--muted);font-size:10px">rules (top=first, last wins)</div>
+      ${Array.from({length:n.rCount||2},(_,i)=>`<div class="row pin"><span class="slot in" data-slot="r${i+1}"></span><label style="min-width:0">r${i+1}</label></div>`).join('')}
+      <div class="row"><button class="btn ghost addslot" style="padding:1px 8px">+ rule</button>
+        <button class="btn ghost delslot" style="padding:1px 8px">- rule</button></div>`;
+  }
+  return '';
+}
+function floorsSel(val){return FLOORS.map(([nm])=>`<option value="${nm}" ${nm===val?'selected':''}>${nm}</option>`).join('');}
+function wallsSel(val){return WALLS.map(([nm])=>`<option value="${nm}" ${nm===val?'selected':''}>${nm}</option>`).join('');}
+function floorsWallsSel(val){return floorsSel(val)+wallsSel(val);}
+
+function renderNodes(){
+  nodesEl.innerHTML='';
+  for(const n of nodes){
+    const el=buildNode(n);
+    el.style.left=n.x+'px';el.style.top=n.y+'px';
+    if(n.type==='noise')el.classList.add('k-'+n.kind);
+    bindNode(el,n);
+    nodesEl.appendChild(el);
+  }
+  drawWires();
+}
+function bindNode(el,n){
+  el.querySelector('.del').onclick=()=>{
+    snapshot();
+    nodes=nodes.filter(x=>x.id!==n.id);
+    edges=edges.filter(e=>e.from!==n.id&&e.to!==n.id);
+    renderNodes();renderPreview();
+  };
+  el.addEventListener('mousedown',e=>{
+    if(e.target.closest('.del')||e.target.closest('.slot')||
+       e.target.closest('input')||e.target.closest('select')||e.target.closest('button')||
+       e.target.closest('.head .del'))return;
+    const startX=e.clientX,startY=e.clientY,ox=n.x,oy=n.y;
+    el.classList.add('dragging');
+    const move=ev=>{
+      n.x=ox+(ev.clientX-startX)/viewZoom;
+      n.y=oy+(ev.clientY-startY)/viewZoom;
+      el.style.left=n.x+'px';el.style.top=n.y+'px';
+      if(n.type==='output')positionPreview();
+      drawWires();
+    };
+    const up=()=>{
+      el.classList.remove('dragging');
+      window.removeEventListener('mousemove',move);window.removeEventListener('mouseup',up);
+    };
+    window.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
+  });
+  const q=(s)=>el.querySelector(s);
+  const bind=(s,fn)=>{const x=q(s);if(x)x.oninput=fn;};
+  switch(n.type){
+    case 'noise':{
+      q('.kind').onchange=e=>{n.kind=e.target.value;renderNodes();renderPreview();};
+      const sync=(slider,num,set)=>{slider.oninput=()=>{num.value=slider.value;set(+slider.value);renderPreview();};
+        num.oninput=()=>{let v=+num.value;if(isNaN(v))return;v=Math.min(+slider.max,Math.max(+slider.min,v));slider.value=v;set(v);renderPreview();};};
+      sync(q('.oct'),q('.octn'),v=>{n.oct=v;});
+      sync(q('.fall'),q('.falln'),v=>{n.falloff=v;});
+      sync(q('.scl'),q('.scln'),v=>{n.scale=v;});
+      sync(q('.wrp'),q('.wrpn'),v=>{n.warp=v;});
+      break;
+    }
+    case 'math':{
+      q('.op').onchange=e=>{n.op=e.target.value;renderNodes();renderPreview();};
+      break;
+    }
+    case 'function':{
+      q('.expr').oninput=e=>{n.expr=e.target.value;renderPreview();};
+      break;
+    }
+    case 'floorCheck':{
+      q('.tgt').onchange=e=>{n.target=e.target.value;renderNodes();renderPreview();};
+      q('.cmp').onchange=e=>{n.eq=e.target.value==='true';renderPreview();};
+      q('.blk').onchange=e=>{n.block=e.target.value;renderPreview();};
+      break;
+    }
+    case 'rule':{
+      bind('.prio',e=>{n.priority=+e.target.value;renderPreview();});
+      q('.op').onchange=e=>{n.op=e.target.value;renderNodes();renderPreview();};
+      bind('.val1',e=>{
+        if(n.op==='bt'){n.lo=+e.target.value;}else{n.val=+e.target.value;}
+        renderPreview();
+      });
+      bind('.val2',e=>{n.hi=+e.target.value;renderPreview();});
+      q('.logic').onchange=e=>{n.logic=e.target.value;renderPreview();};
+      q('.tgt').onchange=e=>{n.target=e.target.value;renderNodes();renderPreview();};
+      q('.blk').onchange=e=>{n.block=e.target.value;renderPreview();};
+      break;
+    }
+    case 'output':{
+      q('.seed').oninput=e=>{n.seed=+e.target.value;renderPreview();};
+      q('.mw').oninput=e=>{n.width=+e.target.value;renderPreview();};
+      q('.mh').oninput=e=>{n.height=+e.target.value;renderPreview();};
+      q('.norm').onchange=e=>{n.normalize=e.target.checked;renderPreview();};
+      q('.blk').onchange=e=>{n.baseFloor=e.target.value;renderPreview();};
+      break;
+    }
+  }
+  const addslot=el.querySelector('.addslot');
+  if(addslot){
+    addslot.onclick=()=>{
+      snapshot();
+      if(n.type==='function')n.aCount=(n.aCount||2)+1;
+      else if(n.type==='rule')n.cCount=(n.cCount||1)+1;
+      else if(n.type==='output')n.rCount=(n.rCount||2)+1;
+      renderNodes();renderPreview();
+    };
+  }
+  const delslot=el.querySelector('.delslot');
+  if(delslot){
+    delslot.onclick=()=>{
+      snapshot();
+      let removed=false;
+      if(n.type==='function'&&(n.aCount||2)>1){n.aCount--;removed=true;}
+      else if(n.type==='rule'&&(n.cCount||1)>1){n.cCount--;removed=true;}
+      else if(n.type==='output'&&(n.rCount||2)>1){n.rCount--;removed=true;}
+      if(removed)renderNodes();renderPreview();
+    };
+  }
+}
+
+function portCenter(el){
+  const s=el.getBoundingClientRect();
+  const worldRect=world.getBoundingClientRect();
+  return {x:(s.left+s.width/2-worldRect.left)/viewZoom, y:(s.top+s.height/2-worldRect.top)/viewZoom};
+}
+function drawWires(){
+  wiresSvg.innerHTML='';
+  for(const e of edges){
+    const fromEl=findSlot(e.from,'out',true);
+    const toEl=findSlot(e.to,e.slot,false);
+    if(!fromEl||!toEl)continue;
+    const a=portCenter(fromEl),b=portCenter(toEl);
+    const d=Math.max(30,Math.abs(b.x-a.x)/2);
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d',`M ${a.x} ${a.y} C ${a.x+d} ${a.y}, ${b.x-d} ${b.y}, ${b.x} ${b.y}`);
+    path.setAttribute('fill','none');path.setAttribute('stroke',wireColor(e.to,e.slot));
+    path.setAttribute('stroke-width','2');
+    wiresSvg.appendChild(path);
+  }
+}
+function wireColor(toId,slot){
+  const n=nodeById(toId);
+  if(n&&n.type==='rule'&&slot==='v')return '#4da3ff';
+  return '#ffb347';
+}
+function findSlot(nodeId,slot,isOut){
+  const el=nodesEl.querySelector(`[data-id="${nodeId}"] .slot.${isOut?'out':'in'}[data-slot="${slot}"]`);
+  return el;
+}
+function applyView(){
+  world.style.transform=`translate(${viewPan.x}px,${viewPan.y}px) scale(${viewZoom})`;
+  drawWires();
+}
+worldWrap.addEventListener('mousedown',e=>{
+  if(e.target!==worldWrap&&e.target!==wiresSvg)return;
+  const sx=e.clientX,sy=e.clientY,ox=viewPan.x,oy=viewPan.y;
+  const move=ev=>{viewPan.x=ox+(ev.clientX-sx);viewPan.y=oy+(ev.clientY-sy);applyView();};
+  const up=()=>{window.removeEventListener('mousemove',move);window.removeEventListener('mouseup',up);};
+  window.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
+});
+worldWrap.addEventListener('wheel',e=>{
+  // don't zoom when scrolling inside the context menu
+  if(e.target.closest('#ctxMenu'))return;
+  e.preventDefault();
+  const f=e.deltaY<0?1.1:1/1.1;
+  viewZoom=Math.min(2.5,Math.max(0.3,viewZoom*f));
+  applyView();
+},{passive:false});
+
+const tempWireEl=document.getElementById('tempWire');
+let dragWire=null;
+
+function updateTempWire(cx,cy){
+  tempWireEl.innerHTML='';
+  if(!dragWire)return;
+  const fromEl=findSlot(dragWire.from,'out',true);
+  if(!fromEl)return;
+  const a=portCenter(fromEl);
+  const b={x:(cx-dragWire.worldLeft)/viewZoom,y:(cy-dragWire.worldTop)/viewZoom};
+  const d=Math.max(30,Math.abs(b.x-a.x)/2);
+  const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.setAttribute('d',`M ${a.x} ${a.y} C ${a.x+d} ${a.y}, ${b.x-d} ${b.y}, ${b.x} ${b.y}`);
+  path.setAttribute('fill','none');path.setAttribute('stroke','#4da3ff');
+  path.setAttribute('stroke-width','2');path.setAttribute('stroke-dasharray','6 4');
+  tempWireEl.appendChild(path);
+}
+
+nodesEl.addEventListener('mousedown',e=>{
+  const slot=e.target.closest('.slot');
+  if(!slot)return;
+  e.stopPropagation();
+  if(slot.classList.contains('out')){
+    const nodeEl=slot.closest('.node');
+    const from=nodeEl.dataset.id;
+    const wr=world.getBoundingClientRect();
+    dragWire={from,x:e.clientX,y:e.clientY,worldLeft:wr.left,worldTop:wr.top};
+    document.body.style.cursor='crosshair';
+    updateTempWire(e.clientX,e.clientY);
+  }else if(slot.classList.contains('in')){
+    const nodeEl=slot.closest('.node');
+    const to=nodeEl.dataset.id,slotName=slot.dataset.slot;
+    // if a wire is being dragged onto it, complete connection
+    // otherwise clicking an input with an existing wire removes it
+    const existing=edges.find(e=>e.to===to&&e.slot===slotName);
+    if(existing){snapshot();edges=edges.filter(e=>e!==existing);renderNodes();renderPreview();}
+  }
+});
+window.addEventListener('mousemove',e=>{
+  if(dragWire){dragWire.x=e.clientX;dragWire.y=e.clientY;updateTempWire(e.clientX,e.clientY);}
+});
+window.addEventListener('mouseup',e=>{
+  if(dragWire){
+    const slot=e.target.closest?e.target.closest('.slot.in'):null;
+    if(slot){
+      const toNode=slot.closest('.node').dataset.id;
+      const slotName=slot.dataset.slot;
+      const from=dragWire.from;
+      if(from!==toNode){
+        const didChange=!edges.some(ed=>ed.to===toNode&&ed.slot===slotName&&ed.from===from);
+        if(didChange)snapshot();
+        edges=edges.filter(ed=>!(ed.to===toNode&&ed.slot===slotName));
+        edges.push({from,to:toNode,slot:slotName});
+      }
+    }
+    dragWire=null;document.body.style.cursor='';
+    tempWireEl.innerHTML='';
+    renderNodes();renderPreview();
+  }
+});
+
+function mapSettings(){
+  const out=nodes.find(n=>n.type==='output');
+  return {seed:out&&out.seed!=null?out.seed:123,
+          width:out&&out.width!=null?out.width:160,
+          height:out&&out.height!=null?out.height:160,
+          normalize:!out||out.normalize!==false};
+}
+function positionPreview(){
+  const out=nodes.find(n=>n.type==='output');
+  const pv=document.getElementById('previewNode');
+  if(!pv)return;
+  const x=out?out.x:420, y=out?out.y:120;
+  // measure the output node's actual height so the preview floats clear above it
+  const outEl=nodesEl.querySelector(`[data-id="${out?out.id:''}"]`);
+  const outH=outEl?outEl.offsetHeight:260;
+  const gap=14;
+  //centered above the output node
+  pv.style.left=(x+110-100)+'px';
+  pv.style.top=(y-outH-gap)+'px';
+}
+function renderPreview(){
+  const {seed,width:mw,height:mh,normalize:norm}=mapSettings();
+  mapW=mw;mapH=mh;normalize=norm;
+  const cv=document.getElementById('cv');
+  const ctx=cv.getContext('2d');
+  const noiseMap=new Map();
+  const noiseFor=n=>{
+    if(!noiseMap.has(n.id))noiseMap.set(n.id,new Noise(seed+n.seedOff*101));
+    return noiseMap.get(n.id);
+  };
+  ctx.fillStyle='#1a1b20';
+  ctx.fillRect(0,0,200,200);
+  for(let y=0;y<mh;y++)for(let x=0;x<mw;x++){
+    const t=evalTile(noiseFor,x,y);
+    const col=COLORS[t.wall?t.wall:t.floor]||COLORS.air;
+    ctx.fillStyle=col;
+    ctx.fillRect(Math.round(x*200/mw),Math.round(y*200/mh),Math.max(1,Math.ceil(200/mw)),Math.max(1,Math.ceil(200/mh)));
+  }
+  ctx.fillStyle='#ff3355';
+  ctx.fillRect(100-2,100-2,4,4);
+  positionPreview();
+}
+
+function makeNode(type,x,y,preset){
+  let n;
+  switch(type){
+    case 'noise':n=mk('noise',x,y,{kind:'simplex',oct:4,falloff:0.55,scale:55,warp:30,seedOff:noiseSeedCounter++});break;
+    case 'math':n=mk('math',x,y,{op:'mul'});break;
+    case 'function':n=mk('function',x,y,{expr:'a*b',aCount:2});break;
+    case 'floorCheck':n=mk('floorCheck',x,y,{target:'floor',block:'sand',eq:true});break;
+    case 'rule':n=mk('rule',x,y,{op:'gt',val:0,lo:0,hi:0.3,logic:'and',target:'floor',block:'stone',priority:(nodes.filter(z=>z.type==='rule').length)+1,cCount:1});break;
+  }
+  if(preset)Object.assign(n,preset);
+  return n;
+}
+
+const ctxMenu=document.getElementById('ctxMenu');
+const ctxList=document.getElementById('ctxList');
+const ctxSearch=document.getElementById('ctxSearch');
+const CTX_ITEMS=[
+  {type:'noise',name:'Noise: simplex',color:'#7aa2f7',search:'noise simplex smooth',preset:{kind:'simplex'}},
+  {type:'noise',name:'Noise: ridged',color:'#7aa2f7',search:'noise ridge mountains',preset:{kind:'ridged'}},
+  {type:'noise',name:'Noise: distance',color:'#7aa2f7',search:'noise dist distance',preset:{kind:'dist'}},
+  //math ops
+  {type:'math',name:'Math: add',color:'#bb9af7',search:'math add + plus',preset:{op:'add'}},
+  {type:'math',name:'Math: subtract',color:'#bb9af7',search:'math sub subtract - minus',preset:{op:'sub'}},
+  {type:'math',name:'Math: multiply',color:'#bb9af7',search:'math mul multiply * times',preset:{op:'mul'}},
+  {type:'math',name:'Math: divide',color:'#bb9af7',search:'math div divide /',preset:{op:'div'}},
+  {type:'math',name:'Math: pow',color:'#bb9af7',search:'math power exponent pow',preset:{op:'pow'}},
+  {type:'math',name:'Math: min',color:'#bb9af7',search:'math min minimum',preset:{op:'min'}},
+  {type:'math',name:'Math: max',color:'#bb9af7',search:'math max maximum',preset:{op:'max'}},
+  {type:'math',name:'Math: abs',color:'#bb9af7',search:'math absolute abs',preset:{op:'abs'}},
+  {type:'math',name:'Math: sin',color:'#bb9af7',search:'math sine wave sin',preset:{op:'sin'}},
+  {type:'math',name:'Math: cos',color:'#bb9af7',search:'math cosine cos',preset:{op:'cos'}},
+  {type:'math',name:'Math: sqrt',color:'#bb9af7',search:'math square root sqrt',preset:{op:'sqrt'}},
+  {type:'math',name:'Math: floor',color:'#bb9af7',search:'math floor round down',preset:{op:'floor'}},
+  {type:'math',name:'Math: ceil',color:'#bb9af7',search:'math ceil round up',preset:{op:'ceil'}},
+  {type:'math',name:'Math: exp',color:'#bb9af7',search:'math exponent exp e',preset:{op:'exp'}},
+  {type:'math',name:'Math: log',color:'#bb9af7',search:'math logarithm log ln',preset:{op:'log'}},
+  {type:'math',name:'Math: clamp',color:'#bb9af7',search:'math clamp limit range',preset:{op:'clamp'}},
+  {type:'math',name:'Math: lerp',color:'#bb9af7',search:'math lerp interpolate blend',preset:{op:'lerp'}},
+  //function
+  {type:'function',name:'Function',color:'#7dcfff',search:'function f formula expression custom'},
+  // floor checks
+  {type:'floorCheck',name:'Floor Check',color:'#f7768e',search:'floorcheck floor check test block'},
+  //rules
+  {type:'rule',name:'Rule: floor',color:'#e0af68',search:'rule floor set',preset:{target:'floor'}},
+  {type:'rule',name:'Rule: wall',color:'#e0af68',search:'rule wall set',preset:{target:'wall'}},
+];
+function ctxSpawn(item){
+  const wr=world.getBoundingClientRect();
+  const x=(ctxMenu._wx-wr.left)/viewZoom;
+  const y=(ctxMenu._wy-wr.top)/viewZoom;
+  snapshot();
+  const n=makeNode(item.type,x,y,item.preset);
+  nodes.push(n);
+  hideCtxMenu();
+  renderNodes();renderPreview();
+}
+function renderCtxMenu(){
+  const q=ctxSearch.value.toLowerCase();
+  ctxList.innerHTML='';
+  for(const it of CTX_ITEMS){
+    const hay=(it.name+' '+(it.search||'')+' '+it.type).toLowerCase();
+    if(!q||!hay.includes(q))continue;
+    const el=document.createElement('div');
+    el.className='ctx-item';
+    el.innerHTML=`<span class="dot" style="background:${it.color}"></span><span class="cn">${it.name}</span>`;
+    el.onclick=()=>ctxSpawn(it);
+    ctxList.appendChild(el);
+  }
+}
+function showCtxMenu(x,y){
+  ctxMenu._wx=x;ctxMenu._wy=y;
+  ctxMenu.style.left=x+'px';ctxMenu.style.top=y+'px';
+  ctxMenu.style.display='block';
+  ctxSearch.value='';
+  renderCtxMenu();
+  ctxSearch.focus();
+}
+function hideCtxMenu(){
+  ctxMenu.style.display='none';
+}
+ctxSearch.oninput=renderCtxMenu;
+ctxSearch.onkeydown=e=>{if(e.key==='Escape')hideCtxMenu();if(e.key==='Enter'){const first=ctxList.querySelector('.ctx-item');if(first)first.click();}};
+worldWrap.addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  showCtxMenu(e.clientX,e.clientY);
+});
+window.addEventListener('mousedown',e=>{
+  if(!e.target.closest('#ctxMenu'))hideCtxMenu();
+});
+
+// ---------- export ----------
+function fmt(x){return (+x).toFixed(2);}
+function scaleExpr(s){
+  return normalize?`(1f / (${fmt(s)}f * width / ${NORM}f))`:`1f/${Math.round(s)}f`;
+}
+function varName(id){return 'v_'+id.replace('n','');}
+function noiseJava(n){
+  const off=(n.seedOff||0);
+  const main=`seed + ${2+off*3}`;
+  if(n.kind==='dist')return `Mathf.dst(x, y, width/2f, height/2f) / Math.max(width, height)`;
+  if(n.kind==='ridged')return `(((float)Ridged.noise2d(seed + 9, x, y, ${n.oct}, ${scaleExpr(n.scale)}) + 1f) / 2f)`;
+  const wf=normalize?`1f / (90f * width / ${NORM}f)`:'1f/90f';
+  const warpx=n.warp>0?`\n            x + ${fmt(n.warp)}f * ((float)Simplex.noise2d(seed + ${off*3}, 2, 0.50f, ${wf}, x, y) - 0.5f) * 2f`:'x';
+  const warpy=n.warp>0?`y + ${fmt(n.warp)}f * ((float)Simplex.noise2d(seed + ${1+off*3}, 2, 0.50f, ${wf}, x, y) - 0.5f) * 2f`:'y';
+  return `((float)Simplex.noise2d(${main}, ${n.oct}, ${fmt(n.falloff)}f, ${scaleExpr(n.scale)}, ${warpx}, ${warpy}) - 0.5f) * 2f`;
+}
+function mathJava(op,a,b,c){
+  const aE=a||'0f',bE=b||'0f',cE=c||'0f';
+  const map={add:`(${aE} + ${bE})`,sub:`(${aE} - ${bE})`,mul:`(${aE} * ${bE})`,div:`(${aE} / ${bE})`,
+    pow:`Mathf.pow(${aE}, ${bE})`,min:`Mathf.min(${aE}, ${bE})`,max:`Mathf.max(${aE}, ${bE})`,
+    abs:`Mathf.abs(${aE})`,sin:`Mathf.sin(${aE})`,cos:`Mathf.cos(${aE})`,sqrt:`Mathf.sqrt(${aE})`,
+    floor:`Mathf.floor(${aE})`,ceil:`Mathf.ceil(${aE})`,exp:`Mathf.exp(${aE})`,log:`Mathf.log(${aE})`,
+    clamp:`Mathf.clamp(${aE}, ${bE}, ${cE})`,lerp:`Mathf.lerp(${aE}, ${bE}, ${cE})`};
+  return map[op]||aE;
+}
+function funcJava(n){
+  let s=n.expr||'0';
+  const aCount=n.aCount||2;
+  for(let i=0;i<aCount;i++){
+    const slot=LETTERS[i];
+    const src=inputFor(n.id,slot);
+    const rep=src?valueRef(src):'0f';
+    s=s.replace(new RegExp('\\b'+slot+'\\b','g'),rep);
+  }
+  return `(${s})`;
+}
+function valueRef(id){
+  const n=nodeById(id);
+  if(!n)return '0f';
+  if(n.type==='noise')return `v_${n.id}`;
+  if(n.type==='math')return `v_${n.id}`;
+  if(n.type==='function')return `v_${n.id}`;
+  if(n.type==='floorCheck')return floorCheckJava(n);
+  return '0f';
+}
+function floorCheckJava(n){
+  const target=n.target==='floor'?'floor':'block';
+  const eq=n.eq?'==':'!=';
+  return `((${target} ${eq} Blocks.${n.block}) ? 1f : 0f)`;
+}
+function condJava(r){
+  const parts=[];
+  const vsrc=inputFor(r.id,'v');
+  if(vsrc){
+    const v=valueRef(vsrc);
+    if(r.op==='gt')parts.push(`${v} > ${fmt(r.val)}f`);
+    else if(r.op==='lt')parts.push(`${v} < ${fmt(r.val)}f`);
+    else if(r.op==='bt')parts.push(`${v} > ${fmt(r.lo)}f && ${v} < ${fmt(r.hi)}f`);
+    else if(r.op==='abslt')parts.push(`Math.abs(${v}) < ${fmt(r.val)}f`);
+  }
+  const cCount=r.cCount||1;
+  for(let i=1;i<=cCount;i++){
+    const src=inputFor(r.id,'c'+i);
+    if(src)parts.push(`${valueRef(src)} != 0f`);
+  }
+  if(parts.length===0)return 'true';
+  return parts.join(r.logic==='or'?' || ':' && ');
+}
+
+document.getElementById('expJava').onclick=()=>{
+  const out=nodes.find(n=>n.type==='output');
+  const rules=ruleOrder();
+  // collect value nodes (noise/math/function) in dependency order, including
+  // nodes reachable from rule inputs and from the output node's r-slots.
+  const ordered=[];
+  const seen=new Set();
+  function visit(id){
+    if(seen.has(id)||!id)return;seen.add(id);
+    const n=nodeById(id);if(!n)return;
+    if(n.type==='function'){
+      for(let i=0;i<(n.aCount||2);i++){const src=inputFor(id,LETTERS[i]);if(src)visit(src);}
+      ordered.push(n);
+    }else if(n.type==='math'){
+      ['a','b','c'].forEach(slot=>{const src=inputFor(id,slot);if(src)visit(src);});
+      ordered.push(n);
+    }else if(n.type==='noise'){
+      ordered.push(n);
+    }else if(n.type==='rule'){
+      const vsrc=inputFor(id,'v');if(vsrc)visit(vsrc);
+      for(let i=1;i<=(n.cCount||1);i++){const src=inputFor(id,'c'+i);if(src)visit(src);}
+    }else if(n.type==='output'){
+      for(let i=1;i<=(n.rCount||2);i++){const src=inputFor(id,'r'+i);if(src)visit(src);}
+    }
+  }
+  for(const r of rules){visit(r.id);}
+  if(out)visit(out.id);
+  let s='    pass((x, y) -> {\n';
+  s+='    block = Blocks.air;\n';
+  for(const n of ordered){
+    let expr;
+    if(n.type==='noise')expr=noiseJava(n);
+    else if(n.type==='math')expr=mathJava(n.op,valueRef(inputFor(n.id,'a')),valueRef(inputFor(n.id,'b')),valueRef(inputFor(n.id,'c')));
+    else expr=funcJava(n);
+    s+=`    float v_${n.id} = ${expr};\n`;
+  }
+  s+=`\n    floor = Blocks.${out?out.baseFloor:'stone'};\n\n`;
+  for(const r of rules){
+    s+=`    if(${condJava(r)}){ ${r.target} = Blocks.${r.block}; }\n`;
+  }
+  s+='});';
+  document.getElementById('code').value=s;
+};
+//Undo 
+let undoStack=[];
+function snapshot(){
+  undoStack.push(JSON.stringify({nodes,edges}));
+  if(undoStack.length>100)undoStack.shift();
+}
+function undo(){
+  if(undoStack.length===0)return;
+  const s=undoStack.pop();
+  const d=JSON.parse(s);
+  nodes=d.nodes;edges=d.edges;
+  seq=1;
+  nodes.forEach(n=>{const m=/^n(\d+)$/.exec(n.id);if(m)seq=Math.max(seq,+m[1]+1);});
+  renderNodes();renderPreview();
+}
+window.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){
+    if(e.target.closest('input,textarea'))return;
+    e.preventDefault();undo();
+  }
+});
+function mut(fn){
+  snapshot();
+  const r=fn();
+  renderNodes();renderPreview();
+  return r;
+}
+
+function importJava(code){
+  snapshot();
+  const newNodes=[],newEdges=[];
+  const seen=new Set();
+  let baseFloor='stone', outRCount=2, outX=420, outY=320;
+  const varNode={};
+  const mkVarId=()=>'n'+(seq++);
+
+  // pass((x, y) -> { ... })
+  let body=code;
+  body=body.replace(/pass\s*\(\s*\(x,\s*y\)\s*->\s*\{/,'');
+  body=body.replace(/\s*\}\)\s*;?\s*$/,'');
+  body=body.replace(/^\s*block\s*=\s*Blocks\.air\s*;\s*/m,'');
+
+  const valRe=/float\s+(v_\w+)\s*=\s*([\s\S]*?);/g;
+  const valDefs=[];
+  body=body.replace(valRe,(m,name,expr)=>{valDefs.push({name,expr});return '';});
+
+  const ruleRe=/if\s*\(\s*([\s\S]+?)\s*\)\s*\{\s*(floor|block)\s*=\s*Blocks\.(\w+)\s*;?\s*\}/g;
+  const rules=[];
+  body=body.replace(ruleRe,(m,cond,target,block)=>{rules.push({cond,target,block});return '';});
+  const bf=body.match(/floor\s*=\s*Blocks\.(\w+)/);
+  if(bf)baseFloor=bf[1];
+
+  // parse a value expression into a node id (creating nodes as needed)
+  function parseValue(expr){
+    // noise simplex
+    let m=expr.match(/Simplex\.noise2d\(seed\s*\+\s*(\d+),\s*(\d+),\s*([\d.]+)f,\s*([^,]+),\s*x\s*\+\s*([\d.]+)f\s*\*\s*\(\(float\)Simplex\.noise2d\(seed\s*\+\s*(\d+),\s*2,\s*[\d.]+f,\s*[^,]+,\s*x,\s*y\)\s*-\s*0\.5f\)\s*\*\s*2f,\s*y\s*\+\s*([\d.]+)f\s*\*\s*\(\(float\)Simplex\.noise2d\(seed\s*\+\s*(\d+),\s*2,\s*[\d.]+f,\s*[^,]+,\s*x,\s*y\)\s*-\s*0\.5f\)\s*\*\s*2f\)\s*-\s*0\.5f\)\s*\*\s*2f/);
+    if(m){
+      const id=mkVarId();
+      newNodes.push({id,type:'noise',x:0,y:0,kind:'simplex',oct:+m[2],falloff:+m[3],scale:parseScale(m[4]),warp:+m[5],seedOff:0});
+      return id;
+    }
+    // simplex no warp
+    m=expr.match(/Simplex\.noise2d\(seed\s*\+\s*(\d+),\s*(\d+),\s*([\d.]+)f,\s*([^,]+),\s*x,\s*y\)\s*-\s*0\.5f\)\s*\*\s*2f/);
+    if(m){
+      const id=mkVarId();
+      newNodes.push({id,type:'noise',x:0,y:0,kind:'simplex',oct:+m[2],falloff:+m[3],scale:parseScale(m[4]),warp:0,seedOff:0});
+      return id;
+    }
+    // ridged
+    m=expr.match(/Ridged\.noise2d\(seed\s*\+\s*9,\s*x,\s*y,\s*(\d+),\s*([^)]+)\)\s*\+\s*1f\)\s*\/\s*2f/);
+    if(m){
+      const id=mkVarId();
+      newNodes.push({id,type:'noise',x:0,y:0,kind:'ridged',oct:+m[1],falloff:0.5,scale:parseScale(m[2]),warp:0,seedOff:0});
+      return id;
+    }
+    // dist
+    m=expr.match(/Mathf\.dst\(x,\s*y,\s*width\/2f,\s*height\/2f\)\s*\/\s*Math\.max\(width,\s*height\)/);
+    if(m){
+      const id=mkVarId();
+      newNodes.push({id,type:'noise',x:0,y:0,kind:'dist',oct:1,falloff:0.5,scale:55,warp:0,seedOff:0});
+      return id;
+    }
+    return null;
+  }
+  function parseScale(s){
+    s=s.trim();
+    const n=s.match(/1f\s*\/\s*\(\s*([\d.]+)f\s*\*\s*width\s*\/\s*(\d+)f\s*\)/);
+    if(n){normalize=true;return +n[1];}
+    const r=s.match(/1f\s*\/\s*([\d.]+)f/);
+    if(r)return +r[1];
+    return +s||55;
+  }
+
+  // layout: value nodes in a column at left
+  let vx=40,vy=40;
+  for(const vd of valDefs){
+    const id=parseValue(vd.expr);
+    if(id){
+      const node=newNodes.find(n=>n.id===id);
+      node.x=vx;node.y=vy;
+      vy+=node.type==='noise'?180:130;
+      varNode[vd.name]=id;
+    }
+  }
+  // rules in a column at right, wired into output r-slots
+  const outId='n'+(seq++);
+  newNodes.push({id:outId,type:'output',x:620,y:320,baseFloor,rCount:Math.max(rules.length,2)});
+  rules.forEach((r,i)=>{
+    const rid=mkVarId();
+    newNodes.push({id:rid,type:'rule',x:380,y:80+i*180,op:'gt',val:0,lo:0,hi:0.3,logic:'and',target:r.target,block:r.block,priority:i+1,cCount:1});
+    newEdges.push({from:rid,to:outId,slot:'r'+(i+1)});
+    // try to wire v-slot
+    const vm=/-?[\d.]+f\s*[<>]\s*(-?[\d.]+)f/.exec(r.cond);
+    // find referenced var in cond
+    const ref=r.cond.match(/v_(\w+)/);
+    if(ref&&varNode['v_'+ref[1]]){
+      newEdges.push({from:varNode['v_'+ref[1]],to:rid,slot:'v'});
+    }
+    // c-slots for floor checks
+    const fc=/-?\d+/g;
+    // simple: any "floor == Blocks.x" becomes a floorCheck wired to c1
+    const fcm=r.cond.match(/floor\s*(==|!=)\s*Blocks\.(\w+)/);
+    if(fcm){
+      const fid=mkVarId();
+      newNodes.push({id:fid,type:'floorCheck',x:200,y:80+i*180,target:'floor',block:fcm[2],eq:fcm[1]==='=='});
+      newEdges.push({from:fid,to:rid,slot:'c1'});
+    }
+  });
+
+  nodes=newNodes;edges=newEdges;
+  renderNodes();renderPreview();
+}
+document.getElementById('impJava').onclick=()=>{
+  importJava(document.getElementById('code').value);
+};
+renderNodes();
+renderPreview();
+applyView();
+</script>
+</body>
+</html>

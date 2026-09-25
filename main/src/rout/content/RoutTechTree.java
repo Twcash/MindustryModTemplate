@@ -1,8 +1,10 @@
 package rout.content;
 
 import arc.struct.ObjectFloatMap;
+import arc.struct.Seq;
 import mindustry.Vars;
 import mindustry.content.Liquids;
+import mindustry.game.Objectives;
 import mindustry.type.Item;
 
 import static mindustry.content.TechTree.*;
@@ -32,7 +34,10 @@ public class RoutTechTree {
                 });
             });
             node(RoutBlocks.routerTurret, ()->{
-
+                node(RoutBlocks.detour, Seq.with(
+                        new Objectives.Research(RoutBlocks.payloadRouter),
+                        new Objectives.Research(RoutBlocks.routerFabricator)
+                ), ()->{});
             });
             node(RoutUnits.necessity, ()->{
                 node(RoutUnits.essential);

@@ -43,12 +43,9 @@ public class RouterDeconstructor extends PayloadDeconstructor {
         return false;
     }
     public class RouterDeconstructorBuild extends PayloadDeconstructorBuild {
-        /** Cached scaled custom reqs for the currently-deconstructing payload. */
         private ItemStack[] currentReqs;
-        /** Last payload we resolved custom reqs for, used to skip the re-resolve. */
         private Payload customReqsFor;
 
-        /** Resolve (and cache) the custom reqs for a payload, or null to use vanilla. */
         private ItemStack[] resolveReqs(Payload payload){
             if(payload == customReqsFor && currentReqs != null) return currentReqs;
             if(payload instanceof BuildPayload bp && deconstructionResults.containsKey(bp.build.block)){

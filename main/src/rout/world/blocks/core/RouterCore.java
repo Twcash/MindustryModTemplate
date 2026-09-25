@@ -139,6 +139,11 @@ public class RouterCore extends CoreBlock {
 
         @Override
         public void onRemoved(){
+            //MUST call super: CoreBuild.onRemoved() does team.data().removeCore(this).
+            //Without it the core stays registered after destruction, so
+            //state.teams.playerCores() never empties and Logic.checkGameState() never
+            //fires game over — the sector can't be lost.
+            super.onRemoved();
             spreadStarted = false;
             spreadFrontier.clear();
             spreadVisited.clear();
@@ -155,7 +160,7 @@ public class RouterCore extends CoreBlock {
             for(int dx = -size; dx <= size; dx++){
                 for(int dy = -size; dy <= size; dy++){
                     Tile t = world.tile(cx + dx, cy + dy);
-                    if(t == null || t.floor().isLiquid) continue;
+                    //if(t == null || t.floor().isLiquid) continue;
                     int ndx = t.x - cx, ndy = t.y - cy;
                     if(ndx * ndx + ndy * ndy > capSq) continue;
                     if(spreadVisited.add(t)){

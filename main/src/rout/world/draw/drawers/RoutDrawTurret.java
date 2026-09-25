@@ -58,7 +58,7 @@ public class RoutDrawTurret extends DrawTurret {
         drawTurret(turret, tb);
         drawHeat(turret, tb);
 
-        if (parts.size > 0) {
+        if (parts.size > 0 || ammoParts.size > 0) {
             if (outline.found()) {
                 //draw outline under everything when parts are involved
                 Draw.z(turretLayer - 0.01f);
@@ -76,11 +76,10 @@ public class RoutDrawTurret extends DrawTurret {
 
                 part.draw(params);
             }
-            //Hardcoding this is a bad idea and will lead to crashes. Until I make a base turret class I'll roll with this.
             if (ammoParts.size > 0 && tb.getAmmoContent() != null) {
-                var parts = ammoParts.get(tb.getAmmoContent());
-                if (parts != null) {
-                    for (var part : parts) {
+                var ammoDrawParts = ammoParts.get(tb.getAmmoContent());
+                if (ammoDrawParts != null) {
+                    for (var part : ammoDrawParts) {
                         params.setRecoil(part.recoilIndex >= 0 && tb.curRecoils != null ? tb.curRecoils[part.recoilIndex] : tb.curRecoil);
                         part.draw(params);
                     }

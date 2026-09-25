@@ -5,6 +5,7 @@ import arc.graphics.Color;
 import arc.graphics.Texture;
 import arc.graphics.g2d.Draw;
 import arc.graphics.g2d.Fill;
+import arc.graphics.g2d.Lines;
 import arc.graphics.g2d.TextureRegion;
 import arc.math.Interp;
 import arc.math.Mathf;
@@ -18,6 +19,7 @@ import mindustry.graphics.Pal;
 import mindustry.type.Item;
 
 import static arc.graphics.g2d.Draw.color;
+import static arc.graphics.g2d.Lines.stroke;
 import static arc.math.Angles.randLenVectors;
 
 public class RoutFx {
@@ -51,5 +53,23 @@ public class RoutFx {
             Draw.rect(region, px, py, e.rotation);
             Draw.alpha(1f);
         }
+    }),hitRouter = new Effect(10, e -> {
+        color(Pal.lightOrange, Color.white, e.fin());
+
+        e.scaled(7f, s -> {
+            stroke(0.5f + s.fout());
+            Lines.circle(e.x, e.y, s.fin() * 6f);
+        });
+
+        stroke(0.5f + e.fout());
+        TextureRegion reg = Core.atlas.find("router");
+        randLenVectors(e.id, 5, e.fin() * 17f, (x, y) -> {
+            float ang = Mathf.angle(x, y);
+            Draw.scl(e.fout(Interp.pow2Out));
+            Draw.alpha(e.fout(Interp.pow2Out));
+            Draw.rect(reg, e.x + x, e.y + y, ang);
+        });
+
+        Drawf.light(e.x, e.y, 20f, e.color, 0.6f * e.fout());
     });
 }
