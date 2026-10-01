@@ -36,6 +36,7 @@ public class RouterPayloadTurret extends Turret {
 
     public RouterPayloadTurret(String name) {
         super(name);
+        outlineIcon = true;
 
         maxAmmo = 3;
         acceptsPayload = true;

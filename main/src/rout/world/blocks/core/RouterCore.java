@@ -27,6 +27,7 @@ import mindustry.world.Build;
 import mindustry.world.Tile;
 import mindustry.world.blocks.ConstructBlock;
 import mindustry.world.blocks.ControlBlock;
+import mindustry.world.blocks.environment.Floor;
 import mindustry.world.blocks.environment.StaticProp;
 import mindustry.world.blocks.storage.CoreBlock;
 import rout.content.RoutBlocks;
@@ -42,20 +43,24 @@ public class RouterCore extends CoreBlock {
     public float spreadDuration = 15f;
     public float spreadInterval = 10f;
     public RouterFloor floor;
+    /** Floors the spread will never convert and never pass through (acts like a
+     *  wall for the wave). Add to this per-core in RoutBlocks to protect terrain. */
+    public ObjectSet<Floor> blacklistedFloors = new ObjectSet<>();
     public RouterCore(String name) {
         super(name);
         replaceable = false;
     }
 
+    /** True if the spread can convert this floor (not liquid, not blacklisted). */
+    public boolean canSpreadOn(Floor f){
+        return f != null && !f.isLiquid && !blacklistedFloors.contains(f);
+    }
     @Override
     public boolean canPlaceOn(Tile tile, Team team, int rotation){
         if(tile == null) return false;
         if(Vars.state.isEditor() || Vars.state.rules.coreBuildAndConfig) return true;
 
         CoreBuild core = team.core();
-
-        //Allow the core to be placed on RouterFloor (with no pre-existing core required),
-        //in addition to vanilla allowCorePlacement zones (sand, spore-moss, etc.).
         tile.getLinkedTilesAs(this, tempTiles);
         if(!tempTiles.contains(o -> (!o.floor().allowCorePlacement && !(o.floor() instanceof RouterFloor)) || o.block() instanceof CoreBlock)){
             return true;
@@ -97,10 +102,7 @@ public class RouterCore extends CoreBlock {
         Draw.reset();
     }
 
-    public class RouterCoreBuild extends CoreBuild implements ControlBlock {
-        //Lazily created so the BlockUnitUnit never leaks to the engine's unit group
-        //(its `tile` is bound to this building via unit() before anything tries to add() it).
-        private BlockUnitc unit;
+    public class RouterCoreBuild extends CoreBuild {
 
         private final Queue<Tile> spreadFrontier = new Queue<>();
         private final ObjectSet<Tile> spreadVisited = new ObjectSet<>();
@@ -110,24 +112,6 @@ public class RouterCore extends CoreBlock {
 
         public int spreadsPerInterval = 4;
         public float spreadChance = 0.85f;
-
-        @Override
-        public Unit unit(){
-            if(unit == null){
-                BlockUnitUnit u = BlockUnitUnit.create();
-                u.team = team;
-                u.type = ((CoreBlock)block).unitType;
-                unit = (BlockUnitc)u;
-            }
-            unit.tile(this);
-            unit.team(team);
-            return (Unit)unit;
-        }
-
-        @Override
-        public boolean canControl(){
-            return true;
-        }
 
         @Override
         public void placed(){
@@ -153,15 +137,18 @@ public class RouterCore extends CoreBlock {
         private void seedFrontier(){
             spreadFrontier.clear();
             spreadVisited.clear();
-            int cx = tile.x + (size - 1) / 2;
-            int cy = tile.y + (size - 1) / 2;
-            int capSq = spreadRange * spreadRange;
+            int ax = tile.x + size / 2;
+            int ay = tile.y + size / 2;
+            //Distance is measured from the building's TRUE centre (x/y) to each tile's
+            //centre (worldx/worldy), so the spread circle is centred on the block no
+            //matter the size — even sizes sit between tiles.
+            float capSq = (float)spreadRange * spreadRange * tilesize * tilesize;
 
             for(int dx = -size; dx <= size; dx++){
                 for(int dy = -size; dy <= size; dy++){
-                    Tile t = world.tile(cx + dx, cy + dy);
-                    //if(t == null || t.floor().isLiquid) continue;
-                    int ndx = t.x - cx, ndy = t.y - cy;
+                    Tile t = world.tile(ax + dx, ay + dy);
+                    if(t == null || !canSpreadOn(t.floor())) continue;
+                    float ndx = t.worldx() - x, ndy = t.worldy() - y;
                     if(ndx * ndx + ndy * ndy > capSq) continue;
                     if(spreadVisited.add(t)){
                         spreadFrontier.addLast(t);
@@ -179,17 +166,18 @@ public class RouterCore extends CoreBlock {
         private void resumeFrontierFromWorld(){
             spreadFrontier.clear();
             spreadVisited.clear();
-            int cx = tile.x + (size - 1) / 2;
-            int cy = tile.y + (size - 1) / 2;
-            int capSq = spreadRange * spreadRange;
+            int ax = tile.x + size / 2;
+            int ay = tile.y + size / 2;
+            float capSq = (float)spreadRange * spreadRange * tilesize * tilesize;
 
-            //seed every non-liquid tile in range — already-spread tiles act as
-            //pass-through so the wave can cross them to reach unconverted tiles.
+            //seed every non-liquid, non-blacklisted tile in range — already-spread tiles act
+            //as pass-through so the wave can cross them to reach unconverted tiles.
             for(int dx = -spreadRange; dx <= spreadRange; dx++){
                 for(int dy = -spreadRange; dy <= spreadRange; dy++){
-                    if(dx * dx + dy * dy > capSq) continue;
-                    Tile t = world.tile(cx + dx, cy + dy);
-                    if(t == null || t.floor().isLiquid) continue;
+                    Tile t = world.tile(ax + dx, ay + dy);
+                    if(t == null || !canSpreadOn(t.floor())) continue;
+                    float ndx = t.worldx() - x, ndy = t.worldy() - y;
+                    if(ndx * ndx + ndy * ndy > capSq) continue;
                     if(spreadVisited.add(t)){
                         spreadFrontier.addLast(t);
                     }
@@ -213,28 +201,6 @@ public class RouterCore extends CoreBlock {
 
         @Override
         public void updateTile(){
-            Unit u = unit();
-            if(u.activelyBuilding()){
-                u.lookAt(angleTo(u.buildPlan()));
-            }
-            if(u.buildPlan() == null){
-                Queue<Teams.BlockPlan> blocks = team.data().plans;
-                for(int i = 0; i < blocks.size; i++){
-                    var block = blocks.get(i);
-                    if(within(block.x * tilesize, block.y * tilesize, 250)){
-                        var btype = block.block;
-
-                        if(Build.validPlace(btype, u.team(), block.x, block.y, block.rotation)
-                            && (state.rules.infiniteResources || team.rules().infiniteResources
-                                || team.items().has(btype.requirements, state.rules.buildCostMultiplier))){
-                            u.addBuild(new BuildPlan(block.x, block.y, block.rotation, block.block, block.config));
-                            //shift build plan to tail so next unit builds something else
-                            blocks.addLast(blocks.removeIndex(i));
-                            break;
-                        }
-                    }
-                }
-            }
             
             if(spreadStarted && floor != null){
                 if(spreadFrontier.size == 0 && spreadTiles == 0){
@@ -244,9 +210,9 @@ public class RouterCore extends CoreBlock {
                 spreadTimer += Time.delta;
                 if(spreadTimer >= spreadInterval){
                     spreadTimer -= spreadInterval;
-                    int cx = tile.x + (size - 1) / 2;
-                    int cy = tile.y + (size - 1) / 2;
-                    int capSq = spreadRange * spreadRange;
+                    int ax = tile.x + size / 2;
+                    int ay = tile.y + size / 2;
+                    float capSq = (float)spreadRange * spreadRange * tilesize * tilesize;
 
                     for(int attempt = 0; attempt < spreadsPerInterval; attempt++){
                         if(spreadFrontier.size == 0) break;
@@ -254,10 +220,10 @@ public class RouterCore extends CoreBlock {
                         Tile t = spreadFrontier.removeFirst();
                         if(t == null) continue;
 
-                        int ddx = t.x - cx, ddy = t.y - cy;
+                        float ddx = t.worldx() - x, ddy = t.worldy() - y;
                         boolean inRange = ddx * ddx + ddy * ddy <= capSq;
 
-                        if(inRange && t.floor() != floor && t.floor() != RoutBlocks.richRouterFloor.asFloor()){
+                        if(inRange && t.floor() != floor && t.floor() != RoutBlocks.richRouterFloor.asFloor() && !blacklistedFloors.contains(t.floor())){
                             //random skip pushes the tile to the back of the queue for a
                             //later pass, creating an organic irregular spread edge.
                             if(Mathf.chance(1f - spreadChance)){
@@ -268,6 +234,9 @@ public class RouterCore extends CoreBlock {
                             if(t.overlay() == Blocks.oreCopper){
                                 t.setOverlay(Blocks.air);
                                 t.setFloor(RoutBlocks.richRouterFloor.asFloor());
+                            } else if(t.overlay() == Blocks.oreLead){
+                                t.setOverlay(Blocks.air);
+                                t.setFloor(RoutBlocks.dormantDistributiveSubstrate.asFloor());
                             }else{
                                 t.setOverlay(Blocks.air);
                                 t.setFloor(floor.asFloor());
@@ -283,8 +252,8 @@ public class RouterCore extends CoreBlock {
                         //organic branching patterns.
                         for(int d = 0; d < 4; d++){
                             Tile n = world.tile(t.x + Geometry.d4[d].x, t.y + Geometry.d4[d].y);
-                            if(n == null || n.floor().isLiquid) continue;
-                            int ndx = n.x - cx, ndy = n.y - cy;
+                            if(n == null || !canSpreadOn(n.floor())) continue;
+                            float ndx = n.worldx() - x, ndy = n.worldy() - y;
                             if(ndx * ndx + ndy * ndy > capSq) continue;
                             if(spreadVisited.add(n)){
                                 spreadFrontier.addLast(n);
@@ -294,9 +263,6 @@ public class RouterCore extends CoreBlock {
                 }
             }
         }
-
-        /** Bumped from 0 so old saves (which only had spreadTimer) don't try to read the
-         *  new spreadStarted bool and misalign. */
         @Override
         public byte version(){
             return 1;

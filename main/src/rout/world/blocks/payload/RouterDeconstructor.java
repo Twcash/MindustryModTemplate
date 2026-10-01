@@ -2,7 +2,11 @@ package rout.world.blocks.payload;
 
 import arc.math.Angles;
 import arc.math.Mathf;
+import arc.scene.ui.Image;
+import arc.scene.ui.layout.Table;
 import arc.struct.ObjectMap;
+import arc.util.Scaling;
+import arc.util.Strings;
 import arc.util.io.Reads;
 import arc.util.io.Writes;
 import mindustry.Vars;
@@ -10,13 +14,20 @@ import mindustry.content.Fx;
 import mindustry.entities.Puddles;
 import mindustry.game.Team;
 import mindustry.gen.Building;
+import mindustry.gen.Icon;
+import mindustry.graphics.Pal;
+import mindustry.type.Item;
 import mindustry.type.ItemStack;
+import mindustry.ui.Styles;
 import mindustry.world.Block;
 import mindustry.world.Tile;
 import mindustry.world.blocks.payloads.BuildPayload;
 import mindustry.world.blocks.payloads.Payload;
 import mindustry.world.blocks.payloads.PayloadDeconstructor;
 import mindustry.world.blocks.storage.CoreBlock;
+import mindustry.world.consumers.ConsumePowerDynamic;
+import mindustry.world.meta.Stat;
+import mindustry.world.meta.StatValues;
 import rout.world.blocks.environment.RouterFloor;
 
 import static mindustry.Vars.state;
@@ -27,9 +38,49 @@ public class RouterDeconstructor extends PayloadDeconstructor {
     /** Per-block override: when this block is deconstructed, these items are produced
      *  instead of its normal requirements. Amounts are scaled by buildCostMultiplier. */
     public ObjectMap<Block, ItemStack[]> deconstructionResults = new ObjectMap<>();
+    /** Per-block power cost to deconstruct. */
+    public ObjectMap<Block, Float> powerRecipeRequirements = new ObjectMap<>();
 
     public RouterDeconstructor(String name) {
         super(name);
+    }
+    @Override
+    public void setStats(){
+        super.setStats();
+        stats.add(Stat.output, table -> {
+            table.row();
+            for(var entry : deconstructionResults.entries()){
+                if(!entry.key.unlockedNow()) continue;
+
+                //time it takes to deconstruct this block, in seconds.
+                float deconstructSecs = entry.key.buildTime / Math.max(deconstructSpeed, 0.001f) / 60f;
+
+                table.table(Styles.grayPanel, t -> {
+                    t.left();
+                    t.image(entry.key.uiIcon).size(40).pad(10f).left().scaling(Scaling.fit).with(i -> StatValues.withTooltip(i, entry.key));
+                    t.table(info -> {
+                        info.add(entry.key.localizedName).left();
+                        info.row();
+                        //centered material output so long block names don't skew it.
+                        info.table(items -> {
+                            for(ItemStack stack : entry.value){
+                                items.image(stack.item.uiIcon).size(24).pad(3).with(i -> StatValues.withTooltip(i, stack.item));
+                                float rate = deconstructSecs > 0f ? stack.amount / deconstructSecs : 0f;
+                                items.add("x" + stack.amount + " (" + Strings.autoFixed(rate, 1) + "/s)").left().padRight(6);
+                            }
+                        }).padTop(4).growX().center();
+                        float power = powerRecipeRequirements.get(entry.key, 0f);
+                        if(power > 0f){
+                            info.image(Icon.power).color(Pal.power).size(24).pad(3);
+                            info.add(power * 60f + "").left();
+                        }
+                        info.row();
+                        info.add("Deconstruct Time: " + Strings.autoFixed(deconstructSecs, 1) + "s").left();
+                    }).pad(10).growX().left();
+                }).fill().padTop(5).padBottom(5);
+                table.row();
+            }
+        });
     }
     @Override
     public boolean canPlaceOn(Tile tile, Team team, int rotation) {
@@ -45,6 +96,9 @@ public class RouterDeconstructor extends PayloadDeconstructor {
     public class RouterDeconstructorBuild extends PayloadDeconstructorBuild {
         private ItemStack[] currentReqs;
         private Payload customReqsFor;
+        /** Direction the current payload was accepted from (-1 = unknown). Items are
+         *  never dumped back toward this side. */
+        private int inputDir = -1;
 
         private ItemStack[] resolveReqs(Payload payload){
             if(payload == customReqsFor && currentReqs != null) return currentReqs;
@@ -79,11 +133,59 @@ public class RouterDeconstructor extends PayloadDeconstructor {
         @Override
         public void handlePayload(Building source, Payload payload){
             super.handlePayload(source, payload);
+            if(source != null){
+                int d = relativeTo(source);
+                if(d != -1) inputDir = d;
+            }
             //Cache custom reqs and reset accum to match the new length if needed.
             ItemStack[] custom = resolveReqs(deconstructing);
             if(custom != null && (accum == null || accum.length != custom.length)){
                 accum = new float[custom.length];
             }
+        }
+
+        /** Distribute items round-robin to every adjacent block EXCEPT the side the
+         *  payload came in from, so nothing flows back into the feed — same "all
+         *  directions but the input" routing as the other payload blocks. */
+        @Override
+        public boolean dump(Item todump){
+            if(!block.hasItems || items.total() == 0 || proximity.size == 0 || (todump != null && !items.has(todump))) return false;
+
+            int dump = this.cdump;
+            var allItems = Vars.content.items();
+            int itemSize = allItems.size;
+            Object[] itemArray = allItems.items;
+
+            for(int i = 0; i < proximity.size; i++){
+                Building other = proximity.get((i + dump) % proximity.size);
+
+                if(inputDir != -1 && relativeTo(other) == inputDir){
+                    incrementDump(proximity.size);
+                    continue;
+                }
+
+                if(todump == null){
+                    for(int ii = 0; ii < itemSize; ii++){
+                        if(!items.has(ii)) continue;
+                        Item item = (Item)itemArray[ii];
+                        if(other.acceptItem(this, item) && canDump(other, item)){
+                            other.handleItem(this, item);
+                            items.remove(item, 1);
+                            incrementDump(proximity.size);
+                            return true;
+                        }
+                    }
+                }else if(other.acceptItem(this, todump) && canDump(other, todump)){
+                    other.handleItem(this, todump);
+                    items.remove(todump, 1);
+                    incrementDump(proximity.size);
+                    return true;
+                }
+
+                incrementDump(proximity.size);
+            }
+
+            return false;
         }
 
         @Override

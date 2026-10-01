@@ -9,31 +9,31 @@ import mindustry.graphics.g3d.HexSkyMesh;
 import mindustry.graphics.g3d.MultiMesh;
 import mindustry.maps.planet.SerpuloPlanetGenerator;
 import mindustry.type.Planet;
+import mindustry.type.SectorPreset;
 import mindustry.world.meta.Env;
 import rout.world.campaign.RoutPlanetGenerator;
 
 public class RoutPlanets {
     public static Planet routulo;
+    public static SectorPreset tutorial;
     public static void loadContent(){
+
         Planets.serpulo.visible = false;
         Planets.serpulo.accessible = false;
         Planets.serpulo.removed = true;
         Planets.serpulo.removeContent();
         routulo = new Planet("routulo", Planets.sun, 1f, 3){{
             generator = new RoutPlanetGenerator();
+            //default launch loadout = the router core, not the vanilla core-shard.
+            generator.defaultLoadout = RoutLoadouts.routerCore;
             accessible = true;
             alwaysUnlocked = true;
             visible = true;
-            clearSectorOnLose = true;
             defaultCore = RoutBlocks.coreRouter;
             startSector = 11;
             allowWaves = true;
             allowLaunchToNumbered = true;
-            //Serpulo does not set defaultEnv either, so both planets use this Planet default.
-            //Pinned explicitly so they cannot drift apart — unit envEnabled/envRequired checks
-            //run against state.rules.env, which comes from here.
             defaultEnv = Env.terrestrial | Env.spores | Env.groundOil | Env.groundWater | Env.oxygen;
-            //campaign flags matching serpulo
             sectorSeed = 2;
             allowSectorInvasion = true;
             enemyCoreSpawnReplace = true;
@@ -47,9 +47,6 @@ public class RoutPlanets {
                     new HexSkyMesh(this, 1, 0.6f, 0.16f, 5, Color.white.cpy().lerp(Pal.spore, 0.55f).a(0.75f), 2, 0.45f, 1f, 0.41f)
             );
             ruleSetter = r->{
-                //CRITICAL: the spawner creates wave units for state.rules.waveTeam, and
-                //state.enemies only counts units on that team. Serpulo sets this explicitly;
-                //without it the wave units have no team to spawn for.
                 r.waveTeam = Team.crux;
                 r.placeRangeCheck = false;
                 r.derelictRepair = true;
@@ -58,6 +55,9 @@ public class RoutPlanets {
                 r.hideSpawns = false;
                 r.waves = true;
             };
+        }};
+        tutorial = new SectorPreset("tutorial", routulo, 11) {{
+                difficulty = 0;
         }};
     }
 }

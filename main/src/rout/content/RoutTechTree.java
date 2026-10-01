@@ -17,6 +17,10 @@ public class RoutTechTree {
 
         RoutPlanets.routulo.techTree = nodeRoot("serpulo", RoutBlocks.coreRouter, () -> {
             context().researchCostMultipliers = costMultipliers;
+            node(RoutUnits.roustalker, ()->{
+                node(RoutUnits.routecerate);
+            });
+            node(RoutBlocks.routerMender);
             nodeProduce(RoutItems.routerDust, ()->{
                 nodeProduce(RoutItems.routerFragment, ()->{
                     nodeProduce(RoutItems.liquidRouter, ()->{
@@ -25,6 +29,7 @@ public class RoutTechTree {
                         });
                     });
                     nodeProduce(RoutItems.routerium, ()->{
+                        nodeProduce(RoutItems.distributiveCore, ()->{});
                         nodeProduce(RoutItems.clearRouter, ()->{
                             nodeProduce(RoutItems.yellowRouterium, ()->{
 
@@ -37,7 +42,9 @@ public class RoutTechTree {
                 node(RoutBlocks.detour, Seq.with(
                         new Objectives.Research(RoutBlocks.payloadRouter),
                         new Objectives.Research(RoutBlocks.routerFabricator)
-                ), ()->{});
+                ), ()->{
+                    node(RoutBlocks.distroute);
+                });
             });
             node(RoutUnits.necessity, ()->{
                 node(RoutUnits.essential);
@@ -47,6 +54,7 @@ public class RoutTechTree {
                 node(RoutBlocks.bigRouterDrill);
             });
             node(RoutBlocks.router2, ()->{
+                node(RoutBlocks.distributor2);
                 node(RoutBlocks.payloadRouter);
                 node(RoutBlocks.ductRouter2, ()->{
                     node(RoutBlocks.liquidRouter2, ()->{
@@ -57,6 +65,7 @@ public class RoutTechTree {
             });
             node(RoutBlocks.routerCompressor, ()->{
                 node(RoutBlocks.routerFabricator, ()->{
+                    node(RoutBlocks.largeRouterFabricator);
                     node(RoutBlocks.routerTransmutator, ()->{
                         node(RoutBlocks.routerDefabricator);
                     });
@@ -67,7 +76,9 @@ public class RoutTechTree {
                     });
                 });
             });
-            node(RoutBlocks.routerWall);
+            node(RoutBlocks.routerWall, ()->{
+                node(RoutBlocks.largeRouterWall);
+            });
         });
     };
 }

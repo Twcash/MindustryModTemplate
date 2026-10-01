@@ -51,6 +51,10 @@ public class MetaphysicalRouter extends Block {
         itemCapacity = 10;
         unloadable = false;
         noUpdateDisabled = true;
+        //passes power through to connected blocks
+        outputsPower = true;
+        consumesPower = false;
+        hasPower = true;
     }
 
     public Tile reachTile(Building build, int direction) {
@@ -108,6 +112,20 @@ public class MetaphysicalRouter extends Block {
             super.updateTile();
             updateRoles();
             distributeItems();
+            connectPower();
+        }
+
+        /** Merges this block's power graph with every power-using block it reaches,
+         *  so power flows across the metaphysical connection. */
+        protected void connectPower() {
+            if(power == null) return;
+            for(int i = 0; i < 4; i++){
+                Building other = reachBuild(this, i);
+                if(other == null || other == this) continue;
+                if(other.power != null && other.power.graph != power.graph){
+                    power.graph.addGraph(other.power.graph);
+                }
+            }
         }
 
         protected void distributeItems() {

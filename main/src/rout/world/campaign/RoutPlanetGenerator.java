@@ -29,6 +29,7 @@ import mindustry.type .*;
 import mindustry.world .*;
 import mindustry.world.blocks.environment .*;
 import rout.content.RoutLoadouts;
+import rout.world.blocks.core.RouterCore;
 
 import static mindustry.Vars .*;
 
@@ -351,6 +352,9 @@ import static mindustry.Vars .*;
 
         @Override
         protected void generate(){
+            //preset sectors use their own map/save (FileMapGenerator) — never run
+            //custom generation for them, so planet gen can't interfere.
+            if(sector.preset != null) return;
 
             class Room{
                 int x, y, radius;
@@ -475,27 +479,7 @@ import static mindustry.Vars .*;
                 spawn.connect(room);
             }
 
-            int tlen = tiles.width * tiles.height;
-            int total = 0, waters = 0;
-
-            for(int i = 0; i < tlen; i++){
-                Tile tile = tiles.geti(i);
-                if(tile.block() == Blocks.air){
-                    total ++;
-                    if(tile.floor().liquidDrop == Liquids.water){
-                        waters ++;
-                    }
-                }
-            }
-
-            boolean naval = (float)waters / total >= 0.19f;
-
-            //create water pathway if the map is flooded
-            if(naval){
-                for(Room room : enemies){
-                    room.connectLiquid(spawn);
-                }
-            }
+            //no naval waves: no water-path carving, and ground-only wave composition.
 
             Seq<Block> ores = Seq.with(Blocks.oreCopper);
             float poles = Math.abs(sector.tile.v.y);
@@ -503,17 +487,27 @@ import static mindustry.Vars .*;
             float scl = 1f;
             float addscl = 1.3f;
 
-            if(Simplex.noise3d(seed, 2, 0.5, scl, sector.tile.v.x, sector.tile.v.y, sector.tile.v.z)*nmag + poles > 0.25f*addscl){
-                //ores.add(Blocks.oreCoal);
-            }
-
-            if(Simplex.noise3d(seed, 2, 0.5, scl, sector.tile.v.x + 1, sector.tile.v.y, sector.tile.v.z)*nmag + poles > 0.5f*addscl){
-                //ores.add(Blocks.oreTitanium);
-            }
-
-            //218 doesn't have thorium generation due to proximity (TODO remove the special case and replace with hidden preset)
-            if(Simplex.noise3d(seed, 2, 0.5, scl, sector.tile.v.x + 2, sector.tile.v.y, sector.tile.v.z)*nmag + poles > 0.7f*addscl && sector.id != 218){
-                //ores.add(Blocks.oreThorium);
+            //lead starts appearing 1 sector away from the starting sector (id 11).
+            Sector startSector = sector.planet.sectors.find(s -> s.id == 11);
+            if(startSector != null){
+                float dist = sector.tile.v.dst(startSector.tile.v);
+                float minDist = Float.MAX_VALUE;
+                for(Sector other : sector.planet.sectors){
+                    if(other == startSector) continue;
+                    minDist = Math.min(minDist, other.tile.v.dst(startSector.tile.v));
+                }
+                if(minDist > 0f){
+                    if(dist >= minDist * 0.6f) ores.add(Blocks.oreLead);
+                    //coal + titanium appear 3 sectors away from sector 11
+                    if(dist >= minDist * 3f){
+                        ores.add(Blocks.oreCoal);
+                        ores.add(Blocks.oreTitanium);
+                    }
+                    //thorium appears 4 sectors away from sector 11
+                    if(dist >= minDist * 4f){
+                        ores.add(Blocks.oreThorium);
+                    }
+                }
             }
 
             if(rand.chance(0.25)){
@@ -643,13 +637,20 @@ import static mindustry.Vars .*;
             }
             Schematics.place(RoutLoadouts.routerCore, spawn.x, spawn.y, Team.sharded);
 
-            //router floor around the core
-            Geometry.circle(spawn.x, spawn.y, tiles.width, tiles.height, 8, (x, y) -> {
-                Tile t = tiles.getn(x, y);
-                if(!t.floor().isLiquid){
-                    t.setFloor(rout.content.RoutBlocks.routerFloor.asFloor());
-                    t.setOverlay(Blocks.air);
+            //router floor around the core, sized to the spread range of the core in the
+            //loadout (NOT the whole spawn clearing) — INCLUDING liquid, so the sector is
+            //always playable even on flooded/naval maps.
+            int spread = 8;
+            for(Schematic.Stile st : RoutLoadouts.routerCore.tiles){
+                if(st.block instanceof RouterCore core){
+                    spread = core.spreadRange;
+                    break;
                 }
+            }
+            Geometry.circle(spawn.x, spawn.y, tiles.width, tiles.height, spread, (x, y) -> {
+                Tile t = tiles.getn(x, y);
+                t.setFloor(rout.content.RoutBlocks.routerFloor.asFloor());
+                t.setOverlay(Blocks.air);
             });
 
             for(Room espawn : enemies){
@@ -672,11 +673,12 @@ import static mindustry.Vars .*;
             state.rules.enemyCoreBuildRadius = 600f;
 
             //spawn air only when spawn is blocked
-            state.rules.spawns = Waves.generate(difficulty, new Rand(sector.id), state.rules.attackMode, state.rules.attackMode && spawner.countGroundSpawns() == 0, naval);
+            state.rules.spawns = Waves.generate(difficulty, new Rand(sector.id), state.rules.attackMode, state.rules.attackMode && spawner.countGroundSpawns() == 0, false);
         }
 
         @Override
         public void postGenerate(Tiles tiles){
+            if(sector.preset != null) return;
             if(sector.hasEnemyBase()){
                 basegen.postGenerate();
 

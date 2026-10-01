@@ -5,15 +5,23 @@ import arc.struct.ObjectMap;
 import arc.struct.ObjectSet;
 import arc.util.Log;
 import arc.util.Time;
+import mindustry.io.JsonIO;
 import mindustry.game.Team;
 import mindustry.game.EventType.*;
+import mindustry.game.MapObjectives;
+import mindustry.editor.MapObjectivesDialog;
 import mindustry.world.Tile;
 import rout.content.*;
 import mindustry.ctype.*;
 import mindustry.mod.*;
 import rout.annotations.Annotations.*;
 import rout.gen.*;
+import rout.world.blocks.environment.RouterFloor;
+import rout.world.campaign.DialogueObjective;
 import rout.world.draw.RoutFx;
+import rout.world.ui.DialogueBar;
+import rout.world.ui.DialogueOption;
+import rout.world.ui.DialogueSystem;
 
 import static mindustry.Vars.*;
 
@@ -63,6 +71,23 @@ public class Rout extends Mod{
         //loadouts), so launching to adjacent sectors uses the core itself instead of
         //falling back to coreShard's copper-requiring loadout.
         RoutLoadouts.registerLoadouts();
+
+        //Custom map objective that carries dialogue, plus its option type.
+        MapObjectives.registerObjective(DialogueObjective::new);
+        //give the objectives editor an interpreter for the custom types, so it
+        //doesn't crash and shows the dialogue fields when selected in the map editor.
+        MapObjectivesDialog.setInterpreter(DialogueObjective.class, MapObjectivesDialog.defaultInterpreter());
+        MapObjectivesDialog.setInterpreter(DialogueOption.class, MapObjectivesDialog.defaultInterpreter());
+        MapObjectivesDialog.setProvider(DialogueOption.class, (type, cons) -> cons.get(new DialogueOption()));
+        //make sure the options array serializes/deserializes in maps.
+        JsonIO.classTag("dialogueOption", DialogueOption.class);
+        JsonIO.classTag("DialogueOption", DialogueOption.class);
+
+        if(!headless){
+            Events.on(ClientLoadEvent.class, e -> new DialogueBar().build());
+            //don't carry the dialogue over into a freshly launched map.
+            Events.on(WorldLoadEvent.class, e -> DialogueSystem.reset());
+        }
 
         //Diagnostics: capture the exact rule/sector state at the moments that matter.
         //postGenerate already logs a healthy state, so whatever insta-captures the sector
@@ -137,15 +162,20 @@ public class Rout extends Mod{
                     Tile ct = world.tile(x, y);
                     if(ct.build != null && ct.block() instanceof rout.world.blocks.core.RouterCore){
                         rout.world.blocks.core.RouterCore rc = (rout.world.blocks.core.RouterCore)ct.block();
-                        int cx = ct.x + (rc.size - 1) / 2;
-                        int cy = ct.y + (rc.size - 1) / 2;
+                        //distance from the building's TRUE centre, matching the drawPlace
+                        //circle exactly and staying centred for any block size.
+                        float bx = ct.build.x, by = ct.build.y;
                         int spread = rc.spreadRange;
-                        int capSq = spread * spread;
+                        float capSq = (float)spread * spread * tilesize * tilesize;
+                        int ax = ct.x + rc.size / 2;
+                        int ay = ct.y + rc.size / 2;
                         for(int dx = -spread; dx <= spread; dx++){
                             for(int dy = -spread; dy <= spread; dy++){
-                                if(dx * dx + dy * dy > capSq) continue;
-                                Tile t = world.tile(cx + dx, cy + dy);
-                                if(t != null) covered.add(t);
+                                Tile t = world.tile(ax + dx, ay + dy);
+                                if(t == null) continue;
+                                float ndx = t.worldx() - bx, ndy = t.worldy() - by;
+                                if(ndx * ndx + ndy * ndy > capSq) continue;
+                                covered.add(t);
                             }
                         }
                     }
@@ -185,7 +215,9 @@ public class Rout extends Mod{
                 if(!(tile.block() instanceof rout.world.blocks.bases.RouterBlock)) continue;
 
                 mindustry.world.Block floor = tile.floor();
-                if(floor != RoutBlocks.routerFloor && floor != RoutBlocks.richRouterFloor){
+                //RouterBlocks are safe on ANY RouterFloor (router, rich, distributive
+                //substrate + dormant) — they only die when stranded on other ground.
+                if(!(floor instanceof RouterFloor)){
                     Float start = orphanBlockSince.get(tile);
                     if(start == null){
                         orphanBlockSince.put(tile, now);

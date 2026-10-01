@@ -48,10 +48,12 @@ public class RoutDrill extends Drill {
     @Override
     public boolean canPlaceOn(Tile tile, Team team, int rotation) {
         if (tile == null) return false;
-        //Allow placement on RouterFloor zones even though no ore is there (the vanilla
-        //check would reject it via canMine). On any other surface, fall through to the
-        //standard Drill placement logic so the drill can actually mine.
         tile.getLinkedTilesAs(this, tempTiles);
+        for(Tile t : tempTiles){
+            if(t.overlay().itemDrop != null && !(t.floor() instanceof RouterFloor)){
+                return false;
+            }
+        }
         if(super.canPlaceOn(tile,team,rotation) && !tempTiles.contains(o -> (!o.floor().allowCorePlacement && !(o.floor() instanceof RouterFloor)) || o.block() instanceof CoreBlock)){
             return true;
         }
